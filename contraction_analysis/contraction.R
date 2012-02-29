@@ -1,4 +1,8 @@
-data = read.csv("/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/combined_data/contraction.csv")
+# Load contraction and LING560 data into one big happy frame
+contraction_data = read.csv("data/contraction_2.16.11.csv")
+l560_data = read.csv("data/560_contractions_2.16.11.csv")
+data = rbind(contraction_data, l560_data)
+
 library(xtable)
 library(lme4)
 library(languageR)
@@ -266,17 +270,17 @@ did$FOLLOWING_BROAD = did$FOLLOWING_BROAD[, drop = TRUE]
 d$WORD = d$WORD[, drop = TRUE]
 
 #separate variables for the broad 'would' pragmatic contexts
-
-levels(would$CONTEXT2) = c("conditional", "hedging", "imperfect", "politeness", "quoted")
-
-would_hedge = subset(would, CONTEXT2 ==  "hedging")
-would_hedge$FOLLOWING_BROAD = would_hedge$FOLLOWING_BROAD[, drop = TRUE]
-
-would_polite = subset(would, CONTEXT2 ==  "politeness")
-would_polite$FOLLOWING_BROAD = would_polite$FOLLOWING_BROAD[, drop = TRUE]
-
-would_imp = subset(would, CONTEXT2 ==  "imperfect")
-would_imp$FOLLOWING_BROAD = would_imp$FOLLOWING_BROAD[, drop = TRUE]
+#TODO: Commented out because it crashes when run on combined data set
+# levels(would$CONTEXT2) = c("conditional", "hedging", "imperfect", "politeness", "quoted")
+# 
+# would_hedge = subset(would, CONTEXT2 ==  "hedging")
+# would_hedge$FOLLOWING_BROAD = would_hedge$FOLLOWING_BROAD[, drop = TRUE]
+# 
+# would_polite = subset(would, CONTEXT2 ==  "politeness")
+# would_polite$FOLLOWING_BROAD = would_polite$FOLLOWING_BROAD[, drop = TRUE]
+# 
+# would_imp = subset(would, CONTEXT2 ==  "imperfect")
+# would_imp$FOLLOWING_BROAD = would_imp$FOLLOWING_BROAD[, drop = TRUE]
 
 #######################################
 #aux-specific variables, post-pronouns#
@@ -630,38 +634,39 @@ pushViewport(viewport(layout=grid.layout(nrow,ncol) ) )
  }
 }
 
+# CEL - I commented past here because I don't have the needed files.
 
 ################################
 ######     recontrast     ######
 ################################
 
-source("/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/Scripts/recontrast.R")
+# source("/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/Scripts/recontrast.R")
 
 
 ################################
 ######   multi speakers   ######
 ################################
 
-speakers = read.csv('/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/multi_speakers.csv')
-d = data.frame(unique(speakers[,4]), paste("sw_", unique(speakers[,4]), sep = ""))
-colnames(d)[2] = "PIN"
-
-multi = subset(cont, SPEAKER %in% d$PIN)
-multi$SPEAKER = multi$SPEAKER[, drop = TRUE]
-
-multi_ex = rbind(subset(multi, NP=="pro" & (WORD=="has" | WORD=="had" | WORD == "have") & CL_ENV == "y"), subset(multi, WORD == "has" & NP == "NP" & CL_ENV == "y"))
-
-#word, NP, speaker, sex, YOB, dialect, educ, subject, depvar
-joe = multi_ex[,c(1,14,20,21,22,23,24,37,44)]
-colnames(joe)[c(2,3,9)] = c("SUBJ","SPEAKER_PIN","DEP_VAR")
-joe$MORPH = as.character(joe$DEP_VAR)
-joe$PHON = as.character(joe$DEP_VAR)
-joe[joe$DEP_VAR=="4",]$MORPH = 1
-joe[joe$DEP_VAR=="4",]$PHON = NA
-joe[joe$DEP_VAR=="3",]$MORPH = 0
-joe[joe$DEP_VAR=="3",]$PHON = 1
-joe[joe$DEP_VAR=="1",]$MORPH = 0
-joe[joe$DEP_VAR=="1",]$PHON = 0
-joe$MORPH = as.factor(joe$MORPH)
-joe$PHON = as.factor(joe$PHON)
+# speakers = read.csv('/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/multi_speakers.csv')
+# d = data.frame(unique(speakers[,4]), paste("sw_", unique(speakers[,4]), sep = ""))
+# colnames(d)[2] = "PIN"
+# 
+# multi = subset(cont, SPEAKER %in% d$PIN)
+# multi$SPEAKER = multi$SPEAKER[, drop = TRUE]
+# 
+# multi_ex = rbind(subset(multi, NP=="pro" & (WORD=="has" | WORD=="had" | WORD == "have") & CL_ENV == "y"), subset(multi, WORD == "has" & NP == "NP" & CL_ENV == "y"))
+# 
+# #word, NP, speaker, sex, YOB, dialect, educ, subject, depvar
+# joe = multi_ex[,c(1,14,20,21,22,23,24,37,44)]
+# colnames(joe)[c(2,3,9)] = c("SUBJ","SPEAKER_PIN","DEP_VAR")
+# joe$MORPH = as.character(joe$DEP_VAR)
+# joe$PHON = as.character(joe$DEP_VAR)
+# joe[joe$DEP_VAR=="4",]$MORPH = 1
+# joe[joe$DEP_VAR=="4",]$PHON = NA
+# joe[joe$DEP_VAR=="3",]$MORPH = 0
+# joe[joe$DEP_VAR=="3",]$PHON = 1
+# joe[joe$DEP_VAR=="1",]$MORPH = 0
+# joe[joe$DEP_VAR=="1",]$PHON = 0
+# joe$MORPH = as.factor(joe$MORPH)
+# joe$PHON = as.factor(joe$PHON)
 #write.csv(joe, file = "contraction_speakers.csv", quote = F, row.names = F)
