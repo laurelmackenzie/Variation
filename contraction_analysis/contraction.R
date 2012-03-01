@@ -50,7 +50,7 @@ data$OBSERVED = as.factor(data$OBSERVED)
 #############################
 
 #cont consists of all contractible data (i.e. not in unreducible contexts) but excludes wouldhave and auxhave. It will also exclude post-pronoun has/have got, but let's keep them in one subset just so we can graph them to show they're categorical.
-cont_hasgot = subset(data, UNREDUC == "not unreducible" & WORD !=  "wouldhave" & WORD != "auxhave" & WORD! = "did" & WORD! = "does" & DIALECT != "PHILADELPHIA_AAVE")
+cont_hasgot = subset(data, UNREDUC == "not unreducible" & WORD !=  "wouldhave" & WORD != "auxhave" & WORD != "did" & WORD != "does" & DIALECT != "PHILADELPHIA_AAVE")
 
 #3-level coding
 cont_hasgot$THREE <- as.factor(cont_hasgot$OBSERVED)
