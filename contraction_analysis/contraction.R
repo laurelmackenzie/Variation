@@ -50,7 +50,7 @@ data$OBSERVED = as.factor(data$OBSERVED)
 #############################
 
 #cont consists of all contractible data (i.e. not in unreducible contexts) but excludes wouldhave and auxhave. It will also exclude post-pronoun has/have got, but let's keep them in one subset just so we can graph them to show they're categorical.
-cont_hasgot = subset(data, UNREDUC == "not unreducible"&WORD!= "wouldhave"&WORD!= "auxhave" & CORPUS!="Fisher")
+cont_hasgot = subset(data, UNREDUC == "not unreducible" & WORD !=  "wouldhave" & WORD != "auxhave" & WORD! = "did" & WORD! = "does" & DIALECT != "PHILADELPHIA_AAVE")
 
 #3-level coding
 cont_hasgot$THREE <- as.factor(cont_hasgot$OBSERVED)
@@ -270,17 +270,16 @@ did$FOLLOWING_BROAD = did$FOLLOWING_BROAD[, drop = TRUE]
 d$WORD = d$WORD[, drop = TRUE]
 
 #separate variables for the broad 'would' pragmatic contexts
-#TODO: Commented out because it crashes when run on combined data set
-# levels(would$CONTEXT2) = c("conditional", "hedging", "imperfect", "politeness", "quoted")
-# 
-# would_hedge = subset(would, CONTEXT2 ==  "hedging")
-# would_hedge$FOLLOWING_BROAD = would_hedge$FOLLOWING_BROAD[, drop = TRUE]
-# 
-# would_polite = subset(would, CONTEXT2 ==  "politeness")
-# would_polite$FOLLOWING_BROAD = would_polite$FOLLOWING_BROAD[, drop = TRUE]
-# 
-# would_imp = subset(would, CONTEXT2 ==  "imperfect")
-# would_imp$FOLLOWING_BROAD = would_imp$FOLLOWING_BROAD[, drop = TRUE]
+ levels(would$CONTEXT2) = c("conditional", "imperfect", "heding", "politeness", "quoted", "none")
+ 
+ would_hedge = subset(would, CONTEXT2 ==  "hedging")
+ would_hedge$FOLLOWING_BROAD = would_hedge$FOLLOWING_BROAD[, drop = TRUE]
+ 
+ would_polite = subset(would, CONTEXT2 ==  "politeness")
+ would_polite$FOLLOWING_BROAD = would_polite$FOLLOWING_BROAD[, drop = TRUE]
+ 
+ would_imp = subset(would, CONTEXT2 ==  "imperfect")
+ would_imp$FOLLOWING_BROAD = would_imp$FOLLOWING_BROAD[, drop = TRUE]
 
 #######################################
 #aux-specific variables, post-pronouns#
