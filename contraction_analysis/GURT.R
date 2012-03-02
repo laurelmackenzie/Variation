@@ -6,6 +6,7 @@ source("contraction.R")
 hiw_NP <- subset(hiw, NP == "NP")
 # NEWTWO appears to be continuous and not categorial. Recoding here. Is something wrong?
 hiw_NP$NEWTWO <- as.logical(hiw_NP$NEWTWO)
+hiw_NP$WORD = recontrast(hiw_NP$WORD) #change from treatment to sum contrasts because no one auxiliary is default
 summary(hiw_NP)
 
 # A base model

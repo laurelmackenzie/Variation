@@ -28,14 +28,8 @@ levels(data$SUBJ_COMPLEXITY) = c("emb", "multi", "single")
 #various other coding clean-up#
 ###############################
 
-#group years of birth into decades of birth
-data$DOB <- as.numeric(data$YOB)
-data[data$YOB < 1930,]$DOB <- 1920
-data[data$YOB < 1940 & data$YOB >= 1930,]$DOB <- 1930
-data[data$YOB < 1950 & data$YOB >= 1940,]$DOB <- 1940
-data[data$YOB < 1960 & data$YOB >= 1950,]$DOB <- 1950
-data[data$YOB < 1970 & data$YOB >= 1960,]$DOB <- 1960
-data[data$YOB >= 1970,]$DOB <- 1970
+#decade of birth
+data$DOB <- cut(data$YOB, breaks = seq(from = 1890, to = 1990, by  = 10), include.lowest=T, right = F, labels = paste(seq(from = 1890, to = 1980, by  = 10)))
 
 #group dialect into south vs. other (what's the difference between south midland and south? I have no idea. The data has twice as much south midland as any other group, including south, so I'm assuming Dallas is in south midland.)
 
@@ -633,14 +627,14 @@ pushViewport(viewport(layout=grid.layout(nrow,ncol) ) )
  }
 }
 
-# CEL - I commented past here because I don't have the needed files.
 
 ################################
 ######     recontrast     ######
 ################################
 
-# source("/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/Scripts/recontrast.R")
+source("recontrast.R")
 
+# CEL - I commented past here because I don't have the needed files.
 
 ################################
 ######   multi speakers   ######
