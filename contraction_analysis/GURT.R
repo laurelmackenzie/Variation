@@ -11,5 +11,5 @@ summary(hiw_NP)
 
 # A base model
 # I wanted to also have YOB, but it causes false convergence, probably because it's too correlated with speaker
-hiw_NP_base.lme <- lmer(NEWTWO ~ CORPUS + NO_WORDS + SEX + EDUC + WORD + CV + PREC_STRESS + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, verbose = TRUE, family = 'binomial')
+hiw_NP_base.lme <- lmer(NEWTWO ~ DOB + CORPUS + NO_WORDS + SEX + EDUC + WORD + CV + PREC_STRESS + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, verbose = TRUE, family = 'binomial')
 summary(hiw_NP_base.lme)
