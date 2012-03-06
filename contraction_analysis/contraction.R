@@ -103,6 +103,7 @@ cont[cont$EDUC < 12 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_S
 cont[cont$EDUC >= 12 & cont$EDUC < 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 1
 cont[cont$EDUC == 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 2
 cont[cont$EDUC > 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 3
+cont$EDUC_STEP = as.numeric(cont$EDUC_STEP)
 
 #########################
 #cont dependent variable#
