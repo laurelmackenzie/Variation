@@ -30,6 +30,7 @@ levels(data$SUBJ_COMPLEXITY) = c("emb", "multi", "single")
 
 #decade of birth
 data$DOB <- cut(data$YOB, breaks = seq(from = 1890, to = 1990, by  = 10), include.lowest=T, right = F, labels = paste(seq(from = 1890, to = 1980, by  = 10)))
+data$DOB = as.numeric(data$DOB)
 
 #group dialect into south vs. other (what's the difference between south midland and south? I have no idea. The data has twice as much south midland as any other group, including south, so I'm assuming Dallas is in south midland.)
 
