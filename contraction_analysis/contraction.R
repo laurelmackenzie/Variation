@@ -29,7 +29,7 @@ levels(data$SUBJ_COMPLEXITY) = c("emb", "multi", "single")
 ###############################
 
 #decade of birth
-data$DOB <- cut(data$YOB, breaks = seq(from = 1890, to = 1990, by  = 10), include.lowest=T, right = F, labels = paste(seq(from = 1890, to = 1980, by  = 10)))
+data$DOB <- cut(data$YOB, breaks = seq(from = 1920, to = 1990, by  = 10), include.lowest=T, right = F, labels = paste(seq(from = 1920, to = 1980, by  = 10)))
 
 #group dialect into south vs. other (what's the difference between south midland and south? I have no idea. The data has twice as much south midland as any other group, including south, so I'm assuming Dallas is in south midland.)
 
@@ -92,6 +92,17 @@ cont[cont$WORD == "would" & cont$CONTEXT == "b", ]$CONTEXT2 <- "c"
 
 #need to do this after CONTEXT2 is all done
 cont$CONTEXT2 = as.factor(cont$CONTEXT2)
+
+#####################################################
+#group years of education for compatibility with SWB#
+#####################################################
+
+cont$EDUC_STEP <- cont$EDUC
+cont[cont$EDUC == 9 & cont$CORPUS == "SWB",]$EDUC_STEP = "NA"
+cont[cont$EDUC < 12 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 0
+cont[cont$EDUC >= 12 & cont$EDUC < 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 1
+cont[cont$EDUC == 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 2
+cont[cont$EDUC > 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 3
 
 #########################
 #cont dependent variable#
