@@ -17,7 +17,9 @@ summary(hiw_NP)
 # Get the correlations
 hiw_NP_corr = subset(hiw_NP, !is.na(EDUC_STEP), select = c(NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, SPEAKING_RATE, DOB, EDUC_STEP))
 cor(hiw_NP_corr)
-summary(hiw_NP$EDUC_STEP)
+# Check again on the subset that has parses
+hiw_NP_corr = subset(hiw_NP, !is.na(EDUC_STEP) & !is.na(SUBJ_DEPTH), select = c(NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, SUBJ_DEPTH, SPEAKING_RATE, DOB, EDUC_STEP))
+cor(hiw_NP_corr)
 
 # A base model
 hiw_NP_NO_WORDS.lme = lmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, family = 'binomial')
@@ -68,7 +70,7 @@ hiw_NP_NO_PHON_FUNC.lme = lmer(NEWTWO ~ NO_PHON_WORDS + NO_WORDS_FUNC_rphon + SP
 summary(hiw_NP_NO_PHON_FUNC.lme)
 # Right now, won't converge
 NO_WORDS_rphonfunc = lm(NO_WORDS ~ NO_PHON_WORDS + NO_WORDS_FUNC_rphon, hiw_NP)$resid
-hiw_NP_NO_PHON_FUNC_WORDS.lme = lmer(NEWTWO ~ NO_PHON_WORDS + NO_WORDS_FUNC_rphon + NO_WORDS_rphonfunc + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, family = 'binomial')
+hiw_NP_NO_PHON_FUNC_WORDS.lme = glm(NEWTWO ~ NO_PHON_WORDS + NO_WORDS_FUNC_rphon + NO_WORDS_rphonfunc, hiw_NP, family = 'binomial')
 summary(hiw_NP_NO_PHON_FUNC_WORDS.lme)
 
 hiw_NP$JOE = 1.1
