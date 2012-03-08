@@ -6,7 +6,6 @@ source("contraction.R")
 # Reduce to the subset we're looking at.
 hiw_NP = subset(hiw, NP == "NP")
 # NEWTWO appears to be continuous and not categorial. Recoding here.
-hiw_NP$NEWTWO = as.logical(hiw_NP$NEWTWO)
 hiw_NP$WORD = recontrast(hiw_NP$WORD) #change from treatment to sum contrasts because no one auxiliary is default
 # We use decade of birth as the numeric levels of the factor so it's continuous. Coding as the actual years
 # or, strangely, as the continuous decades of birth at the original number (e.g., 1950) causes false convergence.
