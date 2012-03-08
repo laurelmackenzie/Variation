@@ -1,5 +1,16 @@
-# Last updated 1/1/12
-# The list of function words comes from Selkirk 1984:352--353, with my addition of 'uh' and 'um'. I can
+"""Update a CSV with an existing NO_PHON_WORDS column with new values."""
+
+import sys
+import csv
+from string import punctuation
+
+WORDS_FIELD = "NO_WORDS"
+PHON_WORDS_FIELD = "NO_PHON_WORDS"
+SUBJ_FIELD = "COMPLETE_SUBJ"
+FUNC_WORDS_MONO_FIELD = "NO_FUNC_WORDS_MONO"
+FUNC_WORDS_MULTI_FIELD = "NO_FUNC_WORDS_MULTI"
+
+# The list of function words comes from Selkirk 1984:352--353, with my addition of 'uh', 'um', and [noise]. I can
 # only assume that's principled. Words are arranged in the order she has them (i.e. by phonological shape).
 # I added because_1 which is 'cause. Selkirk is missing 'have' from her list of auxes; added.
 # Now something to realize: Selkirk 1995 says that when a function word precedes a lexical word, the lexical word
@@ -19,31 +30,79 @@
 # So for now I'm going to leave it the way I had it, which has 'them_1' in here but not 'them'. I'm actually ok
 # with that; it seems pretty true to the spirit of Selkirk's proposal anyway.
 # 'him' is officially out, but there were only 3 of them in SWB + Fisher anyway!
+# CEL: We removed 'them', because we believe it's a prosodic word.
 
-import csv
+# Dysfluency tokens
+DYSFLUENCIES = frozenset(['[noise]','uh','um'])
+
+# Monosyllabic function words
+FWORDS_MONO = frozenset(['a','the','for','from','in','on','till','am','are','were','been','will','shall','can','her','them_1','their','one','when','an','some','all','than','that','for','or','nor','at','of','with','as','up','but','is','was','here','has','had','does','did','would','should','could','it','us','what','his','as','that','this','such','and','but','as','that','if','since',"aren't",'must',"can't",'its','by','to','through','do','be','may','I','i','you','she','he','we','they','me','my','why','who','so','no','too','down','out','round','like','might','your','our','their','whom','whose','these','those','each','both','because_1','have']) 
+
+# Multisyllabic function words
+# CEL: We rejected Selkirk's 'having','being',"haven't","isn't","hadn't","aren't","won't", "wouldn't",
+# 'going', and "couldn't"
+FWORDS_MUTLI = frozenset(['over','under','after','during','before','behind','beneath','beyond','below','between','among','along','against','across','above','about','around','towards','until','except','any','every','either','neither','because'])
+
+def count_phon_words(text):
+    """Return the (phonological word, monosyllabic func., multisyllabic func.) counts for the given text."""
+    phon, func_mono, func_multi = 0, 0, 0
+    for word in text.split():
+        if word in DYSFLUENCIES:
+            pass
+        elif word in FWORDS_MONO:
+            func_mono += 1
+        elif word in FWORDS_MUTLI:
+            func_multi += 1
+        else:
+            phon += 1
+    #Adjust for zero function words
+    if not phon:
+        # Steal from function words to add a phonological word
+        if func_mono:
+            func_mono -= 1
+        elif func_multi:
+            func_multi -= 1
+        else:
+            # There's no real content to this text, so return zero counts
+            return (0, 0, 0)
+        phon += 1
+    return (phon, func_mono, func_multi)
+
+
+def main(inpath, outpath):
+    """Write a new CSV to outpath containing updated NO_PHON_WORDS."""
+    reader = csv.DictReader(open(inpath, 'rUb'))
+    fieldnames = reader.fieldnames
+
+    # Add fieldnames if needed
+    if WORDS_FIELD not in fieldnames:
+        fieldnames.append(WORDS_FIELD)
+    if PHON_WORDS_FIELD not in fieldnames:
+        fieldnames.append(PHON_WORDS_FIELD)
+    if FUNC_WORDS_MONO_FIELD not in fieldnames:
+        fieldnames.append(FUNC_WORDS_MONO_FIELD)
+    if FUNC_WORDS_MULTI_FIELD not in fieldnames:
+        fieldnames.append(FUNC_WORDS_MULTI_FIELD)
+
+    # Set up the output file
+    writer = csv.DictWriter(open(outpath, 'wb'), fieldnames)
+    writer.writeheader()
+
+    # Modify each row
+    for row in reader:
+        # Get the subject and clean it up
+        subj = row[SUBJ_FIELD].lower()
+        subj = ''.join(char for char in subj if char not in punctuation)
+        
+        row[PHON_WORDS_FIELD], row[FUNC_WORDS_MONO_FIELD], row[FUNC_WORDS_MULTI_FIELD] =\
+            count_phon_words(subj)
+        row[WORDS_FIELD] = sum([row[PHON_WORDS_FIELD], row[FUNC_WORDS_MONO_FIELD], row[FUNC_WORDS_MULTI_FIELD]])
+        writer.writerow(row)
+
 
 if __name__ == "__main__":
-    reader = csv.reader(open('/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/combined_data/contraction.csv', 'rUb'))
-    #reader = csv.reader(open('/Users/laurel/Dropbox/Speakers to code/560_contractions.csv', 'rUb'))
-    header = reader.next()
-    coded = []
-    for row in reader:
-        coded.append(row)
-        #   fwords = set(['a','the','for','from','in','on','till','am','are','were','been','will','shall','can','her','them_1','their','one','when','an','some','all','than','that','for','or','nor','at','of','with','as','up','but','is','was','here','has','had','does','did','would','should','could','it','us','what','his','as','that','this','such','and','but','as','that','if','since',"aren't",'must',"can't",'its','by','to','through','do','be','may','I','i','you','she','he','we','they','me','my','why','who','so','no','too','down','out','round','like','might','your','our','their','whom','whose','these','those','each','both','[noise]','uh','um','because_1','have']) # this one has only monosyllabic function words
-        fwords = set(['a','the','for','from','in','on','till','am','are','were','been','will','shall','can','her','them_1','their','one','when','an','some','all','than','that','for','or','nor','at','of','with','as','up','but','is','was','here','has','had','does','did','would','should','could','it','us','what','his','as','that','this','such','and','but','as','that','if','since',"aren't",'must',"can't",'its','by','to','through','do','be','may','I','i','you','she','he','we','they','me','my','why','who','so','no','too','down','out','round','like','might','your','our','their','whom','whose','these','those','each','both','[noise]','uh','um','because_1','have','over','under','after','during','before','behind','beneath','beyond','below','between','among','along','against','across','above','about','around','towards','until','except','having','being',"haven't","isn't","hadn't","aren't","won't", "wouldn't",'going',"couldn't",'any','every','either','neither','because'])
-    for line in coded:
-        subj = line[36].split(' ')
-        counter = 0
-        for word in fwords:
-            counter = counter + subj.count(word)
-        phon_words = len(subj) - counter
-        line.append(phon_words)
-
-    header.append('NO_PHON_WORDS')
-    out = csv.writer(open('/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/combined_data/contraction_phonwords.csv', 'wb'))
-    #out = csv.writer(open('/Users/laurel/Dropbox/Speakers to code/560_contractions_phonwords.csv', 'wb'))
-    out.writerow(header)
-    out = csv.writer(open('/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/combined_data/contraction_phonwords.csv', 'ab'))
-    #out = csv.writer(open('/Users/laurel/Dropbox/Speakers to code/560_contractions_phonwords.csv', 'ab'))
-    out.writerows(coded)
-
+    try:
+        main(sys.argv[1], sys.argv[2])
+    except IndexError:
+        print >> sys.stderr, "Usage: update_phon_words infile outfile"""
+        sys.exit(1)
