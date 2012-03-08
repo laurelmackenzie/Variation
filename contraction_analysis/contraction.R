@@ -1,6 +1,7 @@
 # Load contraction and LING560 data into one big happy frame
 contraction_data = read.csv("data/contraction_2.16.11.csv")
 l560_data = read.csv("data/560_contractions_2.16.11.csv")
+contraction_parses = read.csv("../../contraction_parses.csv")
 data = rbind(contraction_data, l560_data)
 
 library(xtable)

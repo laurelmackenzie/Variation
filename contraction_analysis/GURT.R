@@ -71,3 +71,15 @@ NO_WORDS_rphonfunc = lm(NO_WORDS ~ NO_PHON_WORDS + NO_WORDS_FUNC_rphon, hiw_NP)$
 hiw_NP_NO_PHON_FUNC_WORDS.lme = lmer(NEWTWO ~ NO_PHON_WORDS + NO_WORDS_FUNC_rphon + NO_WORDS_rphonfunc + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, family = 'binomial')
 summary(hiw_NP_NO_PHON_FUNC_WORDS.lme)
 
+hiw_NP$JOE = 1.1
+hiw_NP[hiw_NP$NEWTWO == 0,]$JOE = -.1
+
+#orthographic words
+ortho = ggplot(hiw_NP, aes(NO_WORDS, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(limits = c(1,18), name = "number of orthographic words") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "orthographic words")
+#pros words
+pros = ggplot(hiw_NP, aes(NO_PHON_WORDS, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(limits = c(1,10), name = "number of prosodic words") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "prosodic words")
+#sylls
+sylls = ggplot(hiw_NP, aes(NO_SYLLS, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "number of syllables") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "syllables")
+#speaking rate (n.s.)
+ggplot(hiw_NP, aes(SPEAKING_RATE, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "speaking rate") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "speaking rate (words/sec)")
+arrange(ortho, pros, sylls, ncol = 2)
