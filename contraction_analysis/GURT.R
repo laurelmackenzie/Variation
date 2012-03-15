@@ -26,7 +26,7 @@ hiw_NP_corr$NO_FUNC_WORDS_MULTI = log(hiw_NP_corr$NO_FUNC_WORDS_MULTI + 1)
 cor(hiw_NP_corr)
 # Check again on the subset that has parses
 hiw_NP_corr2 = subset(hiw_NP, !is.na(SUBJ_DEPTH), select = c(NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SUBJ_DEPTH, SPEAKING_RATE, DOB, EDUC_STEP))
-cor(hiw_NP_corr2)
+cor(hiw_NP_corr2, method="spearman")
 
 # A base model
 hiw_NP_NO_WORDS.lme = lmer(NEWTWO ~ log(NO_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, family = 'binomial')
