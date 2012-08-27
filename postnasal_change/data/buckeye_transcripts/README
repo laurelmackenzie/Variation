@@ -1,0 +1,2 @@
+The Buckeye transcripts must be acquired separately. Once you have them:
+cat *.txt > all.txt
