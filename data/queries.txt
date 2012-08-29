@@ -1,0 +1,3 @@
+[^I]G$ words-ng.txt
+GgR$ words-nger.txt
+[^I]Gz$ words-ngs.txt
