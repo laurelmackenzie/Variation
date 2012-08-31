@@ -17,7 +17,6 @@ column
 comb
 crumb
 damn
-dang
 darling
 dingaling
 dong
@@ -31,10 +30,7 @@ goddamn
 gong
 hang
 honeycomb
-hung
 irving
-kong
-kung
 lamb
 lightning
 limb
@@ -43,7 +39,6 @@ lung
 midmorning
 morning
 nothing
-numb
 oblong
 pong
 pudding
