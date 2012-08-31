@@ -23,13 +23,16 @@ August 2012
 from __future__ import division
 import sys
 import argparse
-import re
-from collections import defaultdict
+import random
+from collections import Counter
 from math import log, floor
 
 from lexinfo.cmudictreader import CMUDict
 from eng_syll import eng_syllabify, ENG_CONSONANTS, ENG_ONSETS
 from syllabification import get_onset
+
+# Seed for replicability
+random.seed(0)
 
 SUFFIXES = set(('mb', 'ng', 'mn'))
 SUFFIX_LAST_PHONEME = {'mb': 'B', 'ng': 'G', 'mn': 'N'}
@@ -44,13 +47,28 @@ def tolerated_rate(n):
     return (1.0 - (tolerated_exceptions(n) / n))
 
 
-def analyze(inpath, prondict):
+def is_productive(participants, exceptions):
+    """Return whether the numbers of exceptions is at or below the tolerated threshold."""
+    return exceptions <= tolerated_exceptions(participants + exceptions)
+
+
+def strategy_str(name, participant_set, exception_set):
+    """Return a string representing results for a strategy."""
+    n_participants = len(participant_set)
+    n_exceptions = len(exception_set)
+    return "\n".join((name, "Participants: %d, Exceptions: %d" % (n_participants, n_exceptions),
+                      "Tolerance: %d" % (tolerated_exceptions(n_participants + n_exceptions)),
+                      "Productive?: %s" % is_productive(n_participants, n_exceptions)))
+
+
+def analyze(inpath, prondict, misperceive_rate):
     """Analyze the given file."""
     prons = CMUDict(prondict)
     infile = open(inpath, 'rU')
-    phrase_contexts = set()
-    word_contexts = set()
-    word_exception_contexts = set()
+    phrase = set()
+    word = set()
+    word_exceptions = set()
+    word_exceptions_perceived = set()
     for line in infile:
         tokens = line.strip().split()
         # Count token_n, token_n+1 pairs, which excludes the last token
@@ -71,45 +89,75 @@ def analyze(inpath, prondict):
                 continue
             
             # Always count toward the word level
-            word_contexts.add(token)
-            
+            word.add(token)
+
             # See if the last phoneme can re-syllabify to the next work
             next_onset = get_onset(next_syll, ENG_CONSONANTS)
             resyll_onset = tuple([SUFFIX_LAST_PHONEME[token_suffix]] + list(next_onset))
             
             # If resyllabification wouldn't bleed the deletion, it's a valid phrase level context
             if resyll_onset not in ENG_ONSETS:
-                phrase_contexts.add(token)
+                phrase.add(token)
             else:
-                word_exception_contexts.add(token)
+                word_exceptions.add(token)
+                # With some probability, allow it to be heard as deleted, so it isn't counted
+                # as an exception. We express this as being counted as an exception at 1-p
+                if random.random() > misperceive_rate:
+                    word_exceptions_perceived.add(token)
 
         # Count the last token (phrase-final occurrences)
         last_token = tokens[-1]
         for suffix in SUFFIXES:
             if last_token.endswith(suffix):
                 # Counts toward both levels
-                phrase_contexts.add(last_token)
-                word_contexts.add(last_token)
+                phrase.add(last_token)
+                word.add(last_token)
                 break # Can only end in one suffix
     
     # Validate counts
-    assert word_contexts >= phrase_contexts, \
+    assert word >= phrase, \
         "Word contexts should be a superset of phrase contexts"
+    assert phrase <= (word | word_exceptions), \
+        "All phrase contexts should appear in the union of phrase participants and exceptions"
     
-    # Print simple counts
-    print "All word participants:", len(word_contexts)
-    print "All overlapped participants:", len(phrase_contexts & word_contexts)
-    print "Apparent word exceptions:", len(word_exception_contexts)
-    
-    # Now remove items that were unreliable
-    reliable_word_contexts = word_contexts - word_exception_contexts
-    reliable_word_exception_contexts = word_exception_contexts - word_contexts
-    print "Reliable word participants:", len(reliable_word_contexts)
-    print "Reliable word exceptions:", len(reliable_word_exception_contexts)
+    # Create derived sets
+    word_participants = word & phrase
+    word_participants_only = word_participants - word_exceptions
+    word_exceptions_only = word_exceptions - word_participants
+    word_exceptions_perceived_only = word_exceptions_perceived - word_participants
+    word_both = word_exceptions & word_participants
+    assert word == (word_participants_only | word_exceptions_only | word_both), \
+        "Participants/exceptions/both should cover all word contexts"
 
-    word_max_exceptions = tolerated_exceptions(len(word_contexts))
-    print "Word tolerated exceptions:", word_max_exceptions
-    print "Word observed exceptions:", len(word_contexts - phrase_contexts) 
+    # Print simple counts
+    print "Possible word participants:", len(word)
+    print "All observed word participants:", len(word_participants)
+    print "All observed word exceptions:", len(word_exceptions)
+    print
+    print "Word participant only:", len(word_participants_only)
+    print "Word exception only:", len(word_exceptions_only)
+    print "Word exception and participant:", len(word_both)
+    print
+
+    # Remove items that were unreliable
+    print strategy_str("Strategy: Only count reliable items", word_participants_only,
+                       word_exceptions_only)
+    print
+
+    # Conservative reanalysis strategy
+    print strategy_str("Strategy: Reanalyze when certain", word_participants_only, 
+                       word_exceptions)
+    print
+
+    # Aggressive reanalysis strategy
+    print strategy_str("Strategy: Reanalyze when possible", word_participants, 
+                       word_exceptions_only)
+    print
+
+    # Aggressive reanalysis strategy with mishearing
+    print strategy_str("Strategy: Reanalyze when possible, occasionally misperceiving", 
+                       word_participants, word_exceptions_perceived_only)
+    print
 
 
 def main():
@@ -117,8 +165,10 @@ def main():
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument('file', help='file to analyze')
     parser.add_argument('prondict', help='pronunciation dictionary in cmudict format')
+    parser.add_argument('deletion_perception_rate', type=float,
+                        help='rate at which a deletion is falsely perceived')
     args = parser.parse_args()
-    analyze(args.file, args.prondict)
+    analyze(args.file, args.prondict, args.deletion_perception_rate)
 
 
 if __name__ == "__main__":
