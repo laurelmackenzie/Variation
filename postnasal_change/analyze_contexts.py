@@ -85,6 +85,7 @@ def is_postnasal_stem_exception(token, phon_sequences, stems):
     global _MIN_STEM_LENGTH # We could do the global on the fly, but boy is that dodgy.
     if _MIN_STEM_LENGTH is None:
         _MIN_STEM_LENGTH = min(len(stem) for stem in stems)
+
     # Check for whether the token starts with anything in the stems
     stem_suffixes = ((token[:idx], token[idx:]) for idx in range(_MIN_STEM_LENGTH, len(token)))
     for stem, suffix in stem_suffixes:
@@ -111,6 +112,19 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
         tokens = line.strip().split()
         # Count token_n, token_n+1 pairs, which excludes the last token
         for token, next_token in zip(tokens, tokens[1:]):
+            # Get the first phoneme of the next token
+            try:
+                next_syll = eng_syllabify(prons[next_token.lower()])[0]
+            except KeyError:
+                continue
+
+            # At this point, it's okay to count the word for the stem level
+            # as there's no chance of skipping it based on pron
+
+            # See if it should count toward stem level
+            update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
+
+            # Check word ending for applicattion at word/phrase level
             token_suffix = None
             for suffix in PHON_SEQUENCES:
                 if token.endswith(suffix):
@@ -119,20 +133,9 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
             
             if not token_suffix:
                 continue
-            
-            # Get the first phoneme of the next token
-            try:
-                next_syll = eng_syllabify(prons[next_token.lower()])[0]
-            except KeyError:
-                continue
-
-            # At this point, it's okay to count the word for any level
-            # it can be an example of, as there's no chance of skipping it.
 
             # Always count toward the word level, as the word ends in the suffix.
             word.add(token)
-            # See if it should count toward stem level
-            update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
 
             # See whether it counts toward phrase level
             # See if the last phoneme can re-syllabify to the next word
