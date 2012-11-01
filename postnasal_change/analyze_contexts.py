@@ -60,6 +60,7 @@ def strategy_str(name, participant_set, exception_set):
                       "Tolerance: %d" % (tolerated_exceptions(n_participants + n_exceptions)),
                       "Productive?: %s" % is_productive(n_participants, n_exceptions)))
 
+
 def update_stem(token, phon_sequences, postnasal_stems, stem, stem_exceptions):
     """Updates stem counts for a token.
 
@@ -103,9 +104,11 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     postnasal_stems = set(line.strip() for line in open(stempath, 'rU'))
     infile = open(inpath, 'rU')
     phrase = set()
+    phrase_stress = set()
     word = set()
     stem = set()
     word_exceptions = set()
+    word_exceptions_stress = set()
     word_exceptions_perceived = set()
     stem_exceptions = set()
     for line in infile:
@@ -115,6 +118,7 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
             # Get the first phoneme of the next token
             try:
                 next_syll = eng_syllabify(prons[next_token.lower()])[0]
+                next_syll_stress = any("1" in phoneme for phoneme in next_syll)
             except KeyError:
                 continue
 
@@ -124,7 +128,7 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
             # See if it should count toward stem level
             update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
 
-            # Check word ending for applicattion at word/phrase level
+            # Check word ending for application at word/phrase level
             token_suffix = None
             for suffix in PHON_SEQUENCES:
                 if token.endswith(suffix):
@@ -152,6 +156,14 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
                 if random.random() > misperceive_rate:
                     word_exceptions_perceived.add(token)
 
+            # Consider where stress matters
+            # Also throw in "if there's any onset at all, don't resyll
+            if next_syll_stress or next_onset:
+                # If it can't resyllabify or the next syllable is stressed count it in the stress case
+                phrase_stress.add(token)
+            else:
+                word_exceptions_stress.add(token)
+
         # Count the last token (phrase-final occurrences)
         last_token = tokens[-1]
         for suffix in PHON_SEQUENCES:
@@ -173,10 +185,17 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     word_participants = word & phrase
     word_participants_only = word_participants - word_exceptions
     word_exceptions_only = word_exceptions - word_participants
-    word_exceptions_perceived_only = word_exceptions_perceived - word_participants
     word_both = word_exceptions & word_participants
     assert word == (word_participants_only | word_exceptions_only | word_both), \
         "Participants/exceptions/both should cover all word contexts"
+
+    # Handle perception/stress cases
+    word_exceptions_perceived_only = word_exceptions_perceived - word_participants
+    word_participants_stress = word & phrase_stress
+    word_participants_stress_only = word_participants_stress - word_exceptions_stress
+    word_exceptions_stress_only = word_exceptions_stress - word_participants_stress
+    word_stress_both = word_exceptions_stress & word_participants_stress
+
     stem_participants = stem & word
     stem_participants_only = stem_participants - stem_exceptions
     stem_exceptions_only = stem_exceptions - stem_participants
@@ -186,6 +205,7 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
 
     # Print simple counts
     print "Phrase participants:", len(phrase)
+    print "Phrase stress participants:", len(phrase_stress)
     print
     print "Possible word participants:", len(word)
     print "All observed word participants:", len(word_participants)
@@ -193,6 +213,12 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     print "Word participant only:", len(word_participants_only)
     print "Word exception only:", len(word_exceptions_only)
     print "Word exception and participant:", len(word_both)
+    print
+    print "All observed word stress participants:", len(word_participants_stress)
+    print "All observed word exceptions:", len(word_exceptions_stress)
+    print "Word stress participant only:", len(word_participants_stress_only)
+    print "Word stress exception only:", len(word_exceptions_stress_only)
+    print "Word stress exception and participant:", len(word_stress_both)    
     print
     print "Possible stem participants:", len(stem)
     print "All observed stem participants:", len(stem_participants)
@@ -223,6 +249,18 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     print strategy_str("Strategy: Reanalyze when possible, occasionally misperceiving", 
                        word_participants, word_exceptions_perceived_only)
     print
+
+    # Stress sensitivity
+    print strategy_str("Strategy: Only count reliable items, stress blocks resyllabification", 
+                       word_participants_only, word_exceptions_stress_only)
+    print
+    print strategy_str("Strategy: Reanalyze when certain, stress blocks resyllabification", 
+                       word_participants_only, word_exceptions_stress)
+    print
+    print strategy_str("Strategy: Reanalyze when possible, stress blocks resyllabification", 
+                       word_participants, word_exceptions_stress_only)
+    print
+
 
     print '*' * 20, "Stem Level", '*' * 20
     print "All exceptions:", ", ".join(stem_exceptions)
