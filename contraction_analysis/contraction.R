@@ -1,5 +1,5 @@
-contraction_data = read.csv("data/contraction_3.8.12_parses.csv")
-l560_data = read.csv("data/560_contractions_3.8.12_parses.csv")
+contraction_data = read.csv("data/contraction_3.8.12_probs.csv")
+l560_data = read.csv("data/560_contractions_3.8.12_probs.csv")
 data = rbind(contraction_data, l560_data)
 
 ################################
