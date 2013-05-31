@@ -87,9 +87,15 @@ hiw_NP_NO_FUNC_PHON.lme = lmer(NEWTWO ~ log(NO_FUNC_WORDS + 1) + NO_PHON_WORD_rf
 summary(hiw_NP_NO_FUNC_PHON.lme)
 
 # WIN
-NO_WORDS_rphonfunc = lm(NO_WORDS ~ log(NO_PHON_WORDS) + NO_WORDS_FUNC_rphon, hiw_NP)$resid
+NO_WORDS_rphonfunc = lm(log(NO_WORDS) ~ log(NO_PHON_WORDS) + NO_WORDS_FUNC_rphon, hiw_NP)$resid
 hiw_NP_NO_PHON_FUNC_WORDS.lme = lmer(NEWTWO ~ log(NO_PHON_WORDS) + NO_WORDS_FUNC_rphon + NO_WORDS_rphonfunc + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, family = 'binomial')
 summary(hiw_NP_NO_PHON_FUNC_WORDS.lme)
+
+# Test model quality
+hiw_NP_NO_WORDS.lme = lmer(NEWTWO ~ log(NO_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, family = 'binomial')
+hiw_NP_NO_PHON_FUNC_WORDS.lme = lmer(NEWTWO ~ log(NO_PHON_WORDS) + log(NO_FUNC_WORDS + 1) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw_NP, family = 'binomial')
+anova(hiw_NP_NO_PHON_FUNC_WORDS.lme, hiw_NP_NO_WORDS.lme)
+
 
 # Subject depth (AKA height) is n.s. Nothing to see here.
 hiw_NP_parsed = subset(hiw_NP, !is.na(SUBJ_DEPTH))
