@@ -1,65 +1,60 @@
-# Load contraction and LING560 data into one big happy frame
 contraction_data = read.csv("data/contraction_3.8.12_parses.csv")
 l560_data = read.csv("data/560_contractions_3.8.12_parses.csv")
 data = rbind(contraction_data, l560_data)
 
-library(xtable)
-library(lme4)
-library(languageR)
-library(ggplot2)
+################################
+######     recontrast     ######
+################################
+
+source("recontrast.R")
 
 #########################
 #rename one-letter codes#
 #########################
 
 #unreducible contexts
-levels(data$UNREDUC) = c("pseudocleft", "ellipsis", "hesitation", "infinitival", "null subject", "preceding pause", "question", "stressed", "thing-is", "not unreducible", "yes-no question")
+levels(data$UNREDUC) = c("all-cleft", "pseudocleft", "comparative sub", "ellipsis-deletion", "ellipsis-comparative", "hesitation", "infinitival", "inverse specificational", "locative", "null subject", "preceding pause", "parenthetical", "question", "stressed", "specificational", "thing-is", "that-thing", "do-cleft", "not unreducible", "yes-no question")
 
 #preceding stress
-levels(data$PREC_STRESS) = c("monosyll", "stressed", "unstressed")
+levels(data$PREC_STRESS) = c("aux", "subject", "monosyll", "other", "participle", "stressed", "unstressed")
 
 #preceding grammatical class
-levels(data$PREC_GRAMM_CLASS) = c("adjective", "adverb", "auxiliary", "demonstrative", "disfluency", "emb pronoun", "how", "noun phrase", "pronoun", "preposition", "quantifier", "relative", "verb", "wh-word", "where", "who", "why", "expletive")
+levels(data$PREC_GRAMM_CLASS) = c("adjective", "adverb", "auxiliary", "demonstrative", "disfluency", "emb pronoun", "how", "noun", "pronoun", "preposition", "quantifier", "relative", "verb", "wh-word", "where", "who", "why", "expletive")
 
-#subject complexity
-levels(data$SUBJ_COMPLEXITY) = c("emb", "multi", "single")
+#sex -- this is for readability of regression outputs...
+levels(data$SEX) = c(" = F", " = M")
 
-###############################
-#various other coding clean-up#
-###############################
+#corpus -- likewise
+levels(data$CORPUS) = c(" = Fisher", " = Switchboard", " = PNC")
+
+#auxiliary -- likewise
+data$AUXILIARY = data$WORD
+levels(data$AUXILIARY) = c(" = are", " = auxhave", " = did", " = does", " = had", " = has", " = have", " = is", " = will", " = would", " = wouldhave")
+
+#############################
+####   decade of birth   ####
+#############################
 
 #decade of birth
-data$DOB <- cut(data$YOB, breaks = seq(from = 1890, to = 1990, by  = 10), include.lowest=T, right = F, labels = paste(seq(from = 1890, to = 1980, by  = 10)))
-data$DOB = as.numeric(as.character(data$DOB))
+data$DOB <- cut(data$YOB, breaks = seq(from = 1890, to = 1990, by = 10), include.lowest = T, right = F, labels = paste(seq(from = 1890, to = 1980, by = 10)))
+#data$DOB = as.numeric(as.character(data$DOB))
+data$DOB = as.numeric(as.factor(data$DOB)) #the only way we can get the mixed-effects glms to converge apparently...
 
-#group dialect into south vs. other (what's the difference between south midland and south? I have no idea. The data has twice as much south midland as any other group, including south, so I'm assuming Dallas is in south midland.)
-
-data$BROAD_DIALECT <- "OTHER"
-data[data$DIALECT == "SOUTHERN" | data$DIALECT == "SOUTH MIDLAND",]$BROAD_DIALECT = "SOUTH"
-data$BROAD_DIALECT = as.factor(data$BROAD_DIALECT)
-
-data$OBSERVED = as.factor(data$OBSERVED)
+#age
+data$AGE = data$YEAR_RECORDED - data$YOB
 
 #############################
 #######    cont    ##########
 #############################
 
-#cont consists of all contractible data (i.e. not in unreducible contexts) but excludes wouldhave and auxhave. It will also exclude post-pronoun has/have got, but let's keep them in one subset just so we can graph them to show they're categorical.
-cont_hasgot = subset(data, UNREDUC == "not unreducible" & WORD !=  "wouldhave" & WORD != "auxhave" & WORD != "did" & WORD != "does" & DIALECT != "PHILADELPHIA_AAVE")
-
-#3-level coding
-cont_hasgot$THREE <- as.factor(cont_hasgot$OBSERVED)
-cont_hasgot[cont_hasgot$OBSERVED == 1, ]$THREE <- "1"
-cont_hasgot[cont_hasgot$OBSERVED == 2, ]$THREE <- "1"
-cont_hasgot[cont_hasgot$OBSERVED == 3, ]$THREE <- "3"
-cont_hasgot[cont_hasgot$OBSERVED == 4, ]$THREE <- "4"
-
-#it also gets rid of all the tokens of "has/have got" after pronouns/"other"s (this is a categorical environment for contraction)
-cont = cont_hasgot[!(cont_hasgot$FOLL_WORD == "got" & cont_hasgot$NP != "NP" & !is.na(cont_hasgot$FOLL_WORD)),]
+#cont consists of all contractible data (i.e. not in unreducible contexts) but excludes wouldhave and auxhave. Also exclude the AAVE speakers from 560 since their dialect may contract differently.
+cont_hasgot = subset(data, (UNREDUC == "not unreducible"|UNREDUC == "inverse specificational" | UNREDUC == "specificational") &WORD!= "wouldhave"&WORD!= "auxhave" & DIALECT != "PHILADELPHIA_AAVE")
+cont = subset(cont_hasgot, !(cont_hasgot$NP == "pro" & cont_hasgot$WORD == "has" & cont_hasgot$FOLL_WORD == "got"))
 
 #some level-dropping
 cont$WORD = cont$WORD[, drop = TRUE]
 cont$PREC_GRAMM_CLASS = cont$PREC_GRAMM_CLASS[, drop = TRUE]
+cont$PREC_STRESS = cont$PREC_STRESS[, drop = TRUE]
 
 #tense coding for past vs. non-past
 cont$TENSE <- as.character(cont$WORD)
@@ -85,26 +80,55 @@ cont[cont$WORD == "is" & cont$CONTEXT == "g", ]$CONTEXT2 <- "auxiliary"
 cont[cont$WORD == "is" & cont$CONTEXT == "v", ]$CONTEXT2 <- "auxiliary"
 
 #'would' pragmatic contexts
-cont[cont$WORD == "would" & cont$CONTEXT == "s", ]$CONTEXT2 <- "h"
-cont[cont$WORD == "would" & cont$CONTEXT == "t", ]$CONTEXT2 <- "h"
-cont[cont$WORD == "would" & cont$CONTEXT == "r", ]$CONTEXT2 <- "p"
-cont[cont$WORD == "would" & cont$CONTEXT == "l", ]$CONTEXT2 <- "p"
-cont[cont$WORD == "would" & cont$CONTEXT == "b", ]$CONTEXT2 <- "c"
+#cont[cont$WORD == "would" & cont$CONTEXT == "s", ]$CONTEXT2 <- "h"
+#cont[cont$WORD == "would" & cont$CONTEXT == "t", ]$CONTEXT2 <- "h"
+#cont[cont$WORD == "would" & cont$CONTEXT == "r", ]$CONTEXT2 <- "p"
+#cont[cont$WORD == "would" & cont$CONTEXT == "l", ]$CONTEXT2 <- "p"
+#cont$CONTEXT2 = as.factor(cont$CONTEXT2)
+#I commented these guys out because I ended up doing CONTEXT2 in a more principled way in the thesis.
 
-#need to do this after CONTEXT2 is all done
-cont$CONTEXT2 = as.factor(cont$CONTEXT2)
+#############################
+# let's recontrast some things before we break out into smaller variables
+#############################
+
+cont$WORD = recontrast(cont$WORD)
+cont$PREC_STRESS = recontrast(cont$PREC_STRESS)
+cont$PREC_SEG_M = recontrast(cont$PREC_SEG_M)
+cont$PREC_SEG_P = recontrast(cont$PREC_SEG_P)
+cont$PRONOUN = recontrast(cont$PRONOUN)
+cont$DIALECT = recontrast(cont$DIALECT)
+cont$SEX = recontrast(cont$SEX)
+cont$CORPUS = recontrast(cont$CORPUS)
 
 #####################################################
 #group years of education for compatibility with SWB#
 #####################################################
 
+#One way: force specific years of schooling into SWB's coarse categories:
+#0 = less than high school
+#1 = less than college
+#2 = college
+#3 = more than college
 cont$EDUC_STEP <- cont$EDUC
-cont[cont$EDUC == 9 & cont$CORPUS == "SWB",]$EDUC_STEP = "NA"
-cont[cont$EDUC < 12 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 0
-cont[cont$EDUC >= 12 & cont$EDUC < 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 1
-cont[cont$EDUC == 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 2
-cont[cont$EDUC > 16 & (cont$CORPUS == "Fisher" | cont$CORPUS == "L560"),]$EDUC_STEP <- 3
+cont[cont$EDUC == 9 & cont$CORPUS == " = Switchboard",]$EDUC_STEP = "NA"
+cont[cont$EDUC < 12 & (cont$CORPUS == " = Fisher" | cont$CORPUS == " = PNC"),]$EDUC_STEP <- 0
+cont[cont$EDUC >= 12 & cont$EDUC < 16 & (cont$CORPUS == " = Fisher" | cont$CORPUS == " = PNC"),]$EDUC_STEP <- 1
+cont[cont$EDUC == 16 & (cont$CORPUS == " = Fisher" | cont$CORPUS == " = PNC"),]$EDUC_STEP <- 2
+cont[cont$EDUC > 16 & (cont$CORPUS == " = Fisher" | cont$CORPUS == " = PNC"),]$EDUC_STEP <- 3
 cont$EDUC_STEP = as.numeric(cont$EDUC_STEP)
+
+#Another way: approximate SWB's coarse categories to years of schooling, as follows:
+#less than high school = 9
+#less than college = 12
+#college = 16
+#more than college = 18
+cont$EDUC_EST <- cont$EDUC
+cont[cont$EDUC == 9 & cont$CORPUS == " = Switchboard",]$EDUC_EST = "NA"
+cont[cont$EDUC == 0,]$EDUC_EST = 9
+cont[cont$EDUC == 1,]$EDUC_EST = 12
+cont[cont$EDUC == 2,]$EDUC_EST = 16
+cont[cont$EDUC == 3,]$EDUC_EST = 18
+cont$EDUC_EST = as.numeric(cont$EDUC_EST)
 
 #########################
 #cont dependent variable#
@@ -138,72 +162,54 @@ cont[cont$OBSERVED == 2, ]$ONEFOUR <- "1"
 cont[cont$OBSERVED == 3, ]$ONEFOUR <- "3"
 cont[cont$OBSERVED == 4, ]$ONEFOUR <- "1"
 
-#Additional 2-level coding where what happens to 3 is dependent on what the auxiliary is
-#Assumptions made for this division (these hold for both NPs and pronouns):
-#had: yellow forms are full + h-deletion -- have been lumped in with full forms (problematic after NPs, where they're actually hybrid, but works post-pronouns)
-#has: yellow forms are full + h-deletion -- have been lumped in with full forms
-#have: yellow forms are v + schwa-insertion -- are being called contracted (problematic: they are actually hybrid after NPs; for pronouns I've actually changed this so yellow forms are full + h-deletion) 
-#is: yellow forms don't exist so it doesn't matter
-#will: yellow forms are l + schwa-insertion -- are being called contracted
-#would: yellow forms are d + schwa-insertion -- are being called contracted
-#10.11.10: added 'are' -- straightforward (1+2 = 1; 4 = 4). So far there are no level-2 'are' after pronouns, but if there ever are any, I'll need to add a level for that.
+#Additional 2-level coding where what happens to 3 is dependent on auxiliary identity:
+#had: 1, 2, 3 vs. 4 (problematic after NPs, where they're actually hybrid, but works post-pronouns with the exception of 'it' where they're hybrid)
+#has: 1, 2, 3 vs. 4
+#have: NP: 1, 2 vs. 3, 4; pro: 1, 2, 3 vs. 4 (problematic after NPs, where they're actually hybrid, but works post-pronouns)
+#is: 1, 2 vs. 4
+#will: 1, 2 vs. 3, 4
+#would: 1 vs. 3, 4 (no 2)
+#are: 1, 2 vs. 4
 cont$NEWTWO <- as.numeric(cont$OBSERVED)
-cont[cont$OBSERVED == 1 & cont$WORD == "had" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "had" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "had" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "had" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "has" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "has" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "has" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "has" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "have" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "have" & cont$NP == "NP", ]$NEWTWO <- 0
+cont[cont$OBSERVED == 1, ]$NEWTWO <- 0
+cont[cont$OBSERVED == 2, ]$NEWTWO <- 0
+cont[cont$OBSERVED == 4, ]$NEWTWO <- 1
+
+cont[cont$OBSERVED == 3 & cont$WORD == "had", ]$NEWTWO <- 0
+cont[cont$OBSERVED == 3 & cont$WORD == "has", ]$NEWTWO <- 0
 cont[cont$OBSERVED == 3 & cont$WORD == "have" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 4 & cont$WORD == "have" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "is" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "is" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "is" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "will" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "will" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "will" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "would" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "would" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 4 & cont$WORD == "would" & cont$NP == "NP", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "are" & cont$NP == "NP", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "are" & cont$NP == "NP", ]$NEWTWO <- 0
-
-cont[cont$OBSERVED == 1 & cont$WORD == "had" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "had" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "had" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "had" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "has" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "has" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "has" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "has" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "have" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "have" & cont$NP == "pro", ]$NEWTWO <- 0
 cont[cont$OBSERVED == 3 & cont$WORD == "have" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "have" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "is" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "is" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "is" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "will" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 2 & cont$WORD == "will" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "will" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 4 & cont$WORD == "will" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "would" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 3 & cont$WORD == "would" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 4 & cont$WORD == "would" & cont$NP == "pro", ]$NEWTWO <- 1
-cont[cont$OBSERVED == 1 & cont$WORD == "are" & cont$NP == "pro", ]$NEWTWO <- 0
-cont[cont$OBSERVED == 4 & cont$WORD == "are" & cont$NP == "pro", ]$NEWTWO <- 1
+cont[cont$OBSERVED == 3 & cont$WORD == "will", ]$NEWTWO <- 1
+cont[cont$OBSERVED == 3 & cont$WORD == "would", ]$NEWTWO <- 1
+#cont$NEWTWO = as.factor(cont$NEWTWO) #Making it categorical doesn't allow us to do scatterplots with NEWTWO on the y-axis: ggplot gets mad that it's non-continuous. It doesn't seem to affect the regressions if it's continuous...
 
-#Additional 2-level coding where 'have' and 'had' split their ambiguous level-3 forms into both full and contracted at a rate of 25\% contraction for 'have' and 17\% contraction for 'had'. Other auxiliaries remain the same as in NEWTWO.
-#This, of course, is no longer up to date... these ratios have since changed. Use at your own risk.
-cont$URTWO <- as.factor(cont$NEWTWO)
-#39 of the 96 level-3 have's after NPs become 1; the remaining 57 remain 4. The tokens that get recoded as 1 are just the first 39, no selectional criteria. How I arrived at the 39/57 breakdown: the predicted 30\% clitic insert rate predicts 116 intermediate forms of which 68 are from contracted and 48 are from full. That's a 59/41 ratio. I just applied that same ratio to the 96 level-3 have's that were actually observed.
-cont[cont$WORD=="have"&cont$NP=="NP"&cont$OBSERVED==3,][1:39,]$URTWO = 1
-#21 of the 39 level-3 had's after NPs become 4; the 1 level-4 had after NP stays 4 as do the remaining 18 level-3 had's after NPs. The tokens that get recoded as 4 are just the first 21, no selectional criteria.
-cont[cont$WORD=="had"&cont$NP=="NP"&cont$OBSERVED==3,][1,]$URTWO = 4
+#Joe!
+cont$JOE = 1.1
+cont[cont$NEWTWO == 0,]$JOE = -.1
+
+####################
+# relative clauses #
+####################
+
+rel_all = subset(cont, PREC_GRAMM_CLASS=="relative")
+#Just pulling out is/has/will after who & that for now. We could throw in other auxes in certain environments, but then it would be unbalanced, and we just don't have that much data.
+rel_all[rel_all$OBSERVED == 3 & rel_all$WORD == "has", ]$NEWTWO <- 0
+rel_all[rel_all$OBSERVED == 3 & rel_all$WORD == "will", ]$NEWTWO <- 1
+rel = rbind(subset(rel_all, WORD=="is" & (PREC_SEG_M=="t"|PREC_SEG_M=="a")),
+subset(rel_all, WORD=="has" & (PREC_SEG_M=="t"|PREC_SEG_M=="a")),
+subset(rel_all, WORD=="will" & (PREC_SEG_M=="t"|PREC_SEG_M=="a")))
+
+rel$REST = 0
+rel[!(is.na(rel$NOTES)) & rel$NOTES == "non-restrictive relative",]$REST = 1
+rel$REST = as.factor(rel$REST)
+
+#		that		who			which
+#had	x			√			x 3 -> 1 but ambig
+#has	√			√			x 3 -> 1 but ambig
+#have	x			√			x 3 -> 1 but ambig
+#is		√			√			x 3 ambig
+#will	x			√			x 3 -> 1
+#would	x			√			x 3 -> 1
 
 ########################
 #aux-specific variables#
@@ -277,16 +283,17 @@ did$FOLLOWING_BROAD = did$FOLLOWING_BROAD[, drop = TRUE]
 d$WORD = d$WORD[, drop = TRUE]
 
 #separate variables for the broad 'would' pragmatic contexts
- levels(would$CONTEXT2) = c("conditional", "imperfect", "heding", "politeness", "quoted", "none")
- 
- would_hedge = subset(would, CONTEXT2 ==  "hedging")
- would_hedge$FOLLOWING_BROAD = would_hedge$FOLLOWING_BROAD[, drop = TRUE]
- 
- would_polite = subset(would, CONTEXT2 ==  "politeness")
- would_polite$FOLLOWING_BROAD = would_polite$FOLLOWING_BROAD[, drop = TRUE]
- 
- would_imp = subset(would, CONTEXT2 ==  "imperfect")
- would_imp$FOLLOWING_BROAD = would_imp$FOLLOWING_BROAD[, drop = TRUE]
+
+levels(would$CONTEXT2) = c("conditional", "hedging", "imperfect", "none", "politeness", "quoted")
+
+would_hedge = subset(would, CONTEXT2 ==  "hedging")
+would_hedge$FOLLOWING_BROAD = would_hedge$FOLLOWING_BROAD[, drop = TRUE]
+
+would_polite = subset(would, CONTEXT2 ==  "politeness")
+would_polite$FOLLOWING_BROAD = would_polite$FOLLOWING_BROAD[, drop = TRUE]
+
+would_imp = subset(would, CONTEXT2 ==  "imperfect")
+would_imp$FOLLOWING_BROAD = would_imp$FOLLOWING_BROAD[, drop = TRUE]
 
 #######################################
 #aux-specific variables, post-pronouns#
@@ -297,7 +304,8 @@ had_pron$PRONOUN = had_pron$PRONOUN[, drop = TRUE]
 had_pron_N = table(had_pron$CL_ENV)
 levels(had_pron$CL_ENV) = c("it", "others")
 
-has_pron = subset(has, PREC_GRAMM_CLASS == "pronoun")
+has_prongot = subset(has, PREC_GRAMM_CLASS == "pronoun")
+has_pron = subset(has_prongot, !(has_prongot$FOLL_WORD == "got" & has_prongot$NP != "NP"))
 has_pron$CL_ENV = has_pron$CL_ENV[, drop = TRUE]
 levels(has_pron$CL_ENV) = "(all)"
 
@@ -425,8 +433,6 @@ NP = subset(cont, NP == "NP" & WORD != "are")
 #NP = subset(cont, NP == "NP")
 
 NP$WORD = NP$WORD[, drop = TRUE]
-NP$NO_SYLLS = NP$NO_SYLLS[, drop = TRUE]
-NP$NO_SYLLS = as.numeric(as.character(NP$NO_SYLLS))
 
 #create a CV variable based on preceding segment
 NP$CV <- as.character(NP$PREC_SEG_M)
@@ -434,44 +440,8 @@ NP[NP$PREC_SEG_M ==  "a", ]$CV <- "vowel"
 NP[NP$PREC_SEG_M !=  "a", ]$CV <- "cons"
 NP$CV = as.factor(NP$CV)
 
-#########################
-#number-of-syllable bins#
-#########################
-
-NP$NO_SYLLS_BIN <- as.character(NP$NO_SYLLS)
-NP[NP$NO_SYLLS < 3, ]$NO_SYLLS_BIN <- "1-2"
-NP[NP$NO_SYLLS >= 3 & NP$NO_SYLLS < 5, ]$NO_SYLLS_BIN <- "3-4"
-NP[NP$NO_SYLLS >= 5 & NP$NO_SYLLS < 7, ]$NO_SYLLS_BIN <- "5-6"
-NP[NP$NO_SYLLS >= 7, ]$NO_SYLLS_BIN <- "7+"
-
-#alternative: only bin anything above 10
-#NP[NP$NO_SYLLS > 10 & NP$NO_SYLLS <=  15, ]$NO_SYLLS_BIN <- "10-15"
-#NP[NP$NO_SYLLS > 15, ]$NO_SYLLS_BIN <- "16+"
-NP$NO_SYLLS_BIN = as.factor(NP$NO_SYLLS_BIN)
-#NP$NO_SYLLS_BIN = factor(NP$NO_SYLLS_BIN, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10-15", "16+"))
-
-################
-#subject weight#
-################
-
-#"subject weight" metric: number of syllables x 1 for single word, x 2 for multi word, x 3 for embedded clause
-NP$SUBJ_WEIGHT = NP$NO_SYLLS
-NP[NP$SUBJ_COMPLEXITY=="multi", ]$SUBJ_WEIGHT = NP[NP$SUBJ_COMPLEXITY=="multi", ]$NO_SYLLS * 2
-NP[NP$SUBJ_COMPLEXITY=="emb", ]$SUBJ_WEIGHT = NP[NP$SUBJ_COMPLEXITY=="emb", ]$NO_SYLLS * 3
-
-#now bin the subject weight metric
-NP$SUBJ_WEIGHT_BIN <- as.character(NP$SUBJ_WEIGHT)
-NP[NP$SUBJ_WEIGHT < 6, ]$SUBJ_WEIGHT_BIN <- "1-5"
-NP[NP$SUBJ_WEIGHT >= 6 & NP$SUBJ_WEIGHT < 11, ]$SUBJ_WEIGHT_BIN <- "6-10"
-NP[NP$SUBJ_WEIGHT >= 11 & NP$SUBJ_WEIGHT < 16, ]$SUBJ_WEIGHT_BIN <- "11-15"
-NP[NP$SUBJ_WEIGHT >= 16 & NP$SUBJ_WEIGHT < 21, ]$SUBJ_WEIGHT_BIN <- "16-20"
-NP[NP$SUBJ_WEIGHT >= 21 & NP$SUBJ_WEIGHT < 31, ]$SUBJ_WEIGHT_BIN <- "21-30"
-NP[NP$SUBJ_WEIGHT >= 31 & NP$SUBJ_WEIGHT < 41, ]$SUBJ_WEIGHT_BIN <- "31-40"
-NP[NP$SUBJ_WEIGHT >= 41, ]$SUBJ_WEIGHT_BIN <- "41+"
-NP$SUBJ_WEIGHT_BIN = factor(NP$SUBJ_WEIGHT_BIN, levels = c("1-5", "6-10", "11-15", "16-20", "21-30", "31-40"))
-
 #############################################################################
-#all auxes after NPs EXCEPT sibiliant-final ones where the aux is 'is'/'has'#
+#all auxes after NPs EXCEPT sibilant-final ones where the aux is 'is'/'has'#
 #############################################################################
 
 #When we do the NP analysis, we don't want to include is/has after sibilant-final NPs because any schwa-initial forms we see there could be due to schwa-insertion for geminate avoidance. So we want to omit such forms, but include all others. The NP_EX(amine) field allows us to do this. (This is the same thing we did with would/had after 'it': cut out the ones where a schwa could be for phonotactic reasons.) All analyses of NPs are done on this body of data. This only ends up affecting is/has and really doesn't cut out that much data.
@@ -492,18 +462,15 @@ NP_EX = subset(NP, NP_EX == "y")
 
 #do some dropping
 NP_EX$NEWTWO = NP_EX$NEWTWO[, drop = TRUE]
-NP_EX$URTWO = NP_EX$URTWO[, drop = TRUE]
 NP_EX$ONEFOUR = NP_EX$ONEFOUR[, drop = TRUE]
 NP_EX$TWOALT = NP_EX$TWOALT[, drop = TRUE]
 NP_EX$WORD = NP_EX$WORD[, drop = TRUE]
 
-#opposing single-word subjects to multi-word subjects without caring about embedding
-NP_EX$COMP2 <- as.factor(NP_EX$SUBJ_COMPLEXITY)
-NP_EX[NP_EX$SUBJ_COMPLEXITY ==  "emb", ]$COMP2 <- "multi"
-NP_EX$COMP2 = NP_EX$COMP2[, drop = TRUE]
-
 #make duration numeric
 NP_EX$SUBJ_DUR = as.numeric(as.character(NP_EX$SUBJ_DUR))
+
+#disfluency count
+NP_EX$DIS = NP_EX$NO_WORDS_DIS-NP_EX$NO_WORDS
 
 ######################################
 #aux-specific variables, post-NP only#
@@ -558,7 +525,9 @@ would_NP$UNREDUC = would_NP$UNREDUC[, drop = TRUE]
 #has, is, and will together -- the three whose surface forms can be unambiguously attributed to underlying forms.
 hiw = subset(NP_EX, WORD=="has"|WORD=="is"|WORD=="will")
 hiw$PREC_GRAMM_CLASS = hiw$PREC_GRAMM_CLASS[, drop = TRUE]
+hiw$WORD = hiw$WORD[, drop = TRUE]
 
+#What is this, my son Tom? Why not just use NEWTWO? Why did I do this...
 hiw$RECODE_THREE <- as.numeric(hiw$THREE)
 hiw[hiw$WORD=="is"&hiw$THREE==1,]$RECODE_THREE = 0
 hiw[hiw$WORD=="is"&hiw$THREE==4,]$RECODE_THREE = 1
@@ -640,39 +609,37 @@ pushViewport(viewport(layout=grid.layout(nrow,ncol) ) )
  }
 }
 
+###################
+#    corstars1    #
+###################
 
-################################
-######     recontrast     ######
-################################
+#Makes a nice correlation table, with only the lower triangle of the matrix so no values are redundant, and stars representing significant correlations! Input is a matrix of raw data, the columns that you want correlations between.
 
-source("recontrast.R")
-
-# CEL - I commented past here because I don't have the needed files.
-
-################################
-######   multi speakers   ######
-################################
-
-# speakers = read.csv('/Users/laurel/Dropbox/Dissertation/Empirical/Contraction/multi_speakers.csv')
-# d = data.frame(unique(speakers[,4]), paste("sw_", unique(speakers[,4]), sep = ""))
-# colnames(d)[2] = "PIN"
-# 
-# multi = subset(cont, SPEAKER %in% d$PIN)
-# multi$SPEAKER = multi$SPEAKER[, drop = TRUE]
-# 
-# multi_ex = rbind(subset(multi, NP=="pro" & (WORD=="has" | WORD=="had" | WORD == "have") & CL_ENV == "y"), subset(multi, WORD == "has" & NP == "NP" & CL_ENV == "y"))
-# 
-# #word, NP, speaker, sex, YOB, dialect, educ, subject, depvar
-# joe = multi_ex[,c(1,14,20,21,22,23,24,37,44)]
-# colnames(joe)[c(2,3,9)] = c("SUBJ","SPEAKER_PIN","DEP_VAR")
-# joe$MORPH = as.character(joe$DEP_VAR)
-# joe$PHON = as.character(joe$DEP_VAR)
-# joe[joe$DEP_VAR=="4",]$MORPH = 1
-# joe[joe$DEP_VAR=="4",]$PHON = NA
-# joe[joe$DEP_VAR=="3",]$MORPH = 0
-# joe[joe$DEP_VAR=="3",]$PHON = 1
-# joe[joe$DEP_VAR=="1",]$MORPH = 0
-# joe[joe$DEP_VAR=="1",]$PHON = 0
-# joe$MORPH = as.factor(joe$MORPH)
-# joe$PHON = as.factor(joe$PHON)
-#write.csv(joe, file = "contraction_speakers.csv", quote = F, row.names = F)
+corstars <- function(x){
+	require(Hmisc)
+	x <- as.matrix(x)
+	R <- rcorr(x, type = "spearman")$r
+	p <- rcorr(x, type = "spearman")$P
+	
+	## define notions for significance levels; spacing is important
+	mystars <- ifelse(p < .001, "***", ifelse(p < .01, "** ", ifelse(p < .05, "* ", " ")))
+	
+	## truncate the matrix that holds the correlations to two decimal
+	R <- format(round(cbind(rep(-1.11, ncol(x)), R), 2))[,-1]
+	
+	## build a new matrix that includes the correlations with their appropriate stars
+	Rnew <- matrix(paste(R, mystars, sep = ""), ncol = ncol(x))
+	diag(Rnew) <- paste(diag(R), " ", sep = "")
+	rownames(Rnew) <- colnames(x)
+	colnames(Rnew) <- paste(colnames(x), "", sep = "")
+	
+	## remove upper triangle
+	Rnew <- as.matrix(Rnew)
+	Rnew[upper.tri(Rnew, diag = TRUE)] <- ""
+	Rnew <- as.data.frame(Rnew)
+	
+	## remove first row and last column and return the matrix (which is now a data frame)
+	Rnew <- cbind(Rnew[1:length(Rnew)-1])
+	Rnew <- rbind(Rnew[2:nrow(Rnew),])
+	return(Rnew)
+	}
