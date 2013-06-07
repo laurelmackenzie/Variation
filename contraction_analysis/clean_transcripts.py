@@ -12,7 +12,10 @@ def main():
     dys = re.compile(r"^[\w']+-$")
     laughter = re.compile(r"^\[laughter-([\w']+)\]$")
     number = re.compile(r"(_\d+)$")
-    bad_tokens = set(["[noise]", "[laughter]", "[vocalized-noise]"])
+    # Note that this incorrecly exclude the word "hum", which I have yet to find
+    # as a word (as opposed to transcribed noise)
+    bad_tokens = set(["[noise]", "[laughter]", "[vocalized-noise]", "um", "uh",
+                      "hum", "um-hum", "uh-huh", "uh-hum", "huh-uh"])
 
     for line in sys.stdin:
         line = line.strip()
