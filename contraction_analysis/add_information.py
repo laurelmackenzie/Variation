@@ -3,7 +3,7 @@
 
 import sys
 import csv
-from itertools import chain
+from itertools import chain, ifilter
 
 from ngram import NgramModel
 
@@ -18,11 +18,11 @@ def train(train_file):
     print "Reading tokens..."
     fake_tokens = set([BEGIN, END])
     # First, organize by utterances
-    utt_tokens = [[BEGIN] + line.split() + [END] for line in train_file]
+    utt_tokens = ([BEGIN] + line.split() + [END] for line in train_file)
     # Then, flatten it
-    tokens = [token for token in chain.from_iterable(utt_tokens)]
+    tokens = chain.from_iterable(utt_tokens)
     # Pull out just unigrams as well
-    raw_tokens = [token for token in tokens if token not in fake_tokens]
+    raw_tokens = ifilter(lambda token: token not in fake_tokens, tokens)
 
     # Compute probs
     print "Computing unigram probabilities..."
@@ -31,7 +31,7 @@ def train(train_file):
     bigram_left = NgramModel(2, tokens)
     # Reverse to get right context
     print "Computing bigram right probabilities..."
-    bigram_right = NgramModel(2, tokens[::-1])
+    bigram_right = NgramModel(2, reversed(list(tokens)))
 
     return (unigram, bigram_left, bigram_right)
 
