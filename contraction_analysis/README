@@ -1,0 +1,76 @@
+If you want to try to tag the transcripts using a standard model:
+*****************************************************************
+Preparing the transcripts for analysis:
+1. Run tag_transcripts.sh
+
+2. Analyze the contraction/tag pairs:
+grep -o -P "'(d|ll|m|s|re|ve)_\w+" data/all_trans_tagged.txt | sort | uniq -c
+   4088 'd_MD
+      1 'd_NNP
+     75 'd_VBD
+   4902 'll_MD
+  12400 'm_VBP
+  16664 're_VBP
+      3 's_NNS
+   6458 's_POS
+     22 's_PRP
+  60188 's_VBZ
+    212 've_VB
+  12199 've_VBP
+
+Some things to note:
+
+-'d_NNP is just a mistake ("I have a six and a half year old that'd
+probably enjoy that.").
+
+-'d_VBD is mostly auxiliary (not lexical) have
+
+-'s_NNS is an error restricted to mistagging the "us" in "let's",
+ which should actually be let_VB 's_PRP.
+
+-'ve appears as VP and VBP, which is somewhat odd but doesn't matter
+
+- If you actually look at the 's_POS versus 's_VBZ, it's actually
+  quite bad; a lot of the POS items are actually VBZ's. Based on this
+  I stopped trying to use a standard model.
+
+Analyzing the Penn Treebank gold standard tags:
+***********************************************
+1. Run prep_swb_pos.sh
+
+2. Analyze the contraction/tag pairs:
+grep -o -P "'(d|ll|m|s|re|ve)_\w+" data/swb_pos_converted.txt | sort | uniq -c
+   1454 'd_MD
+    114 'd_VBD
+   1881 'll_MD
+   5613 'm_VBP
+   7184 're_VBP
+  26516 's_BES
+   1528 's_HVS
+     11 's_NNP
+      5 's_NNPS
+     14 's_NNS
+   1255 's_POS
+    433 's_PRP
+      1 's_RB
+      2 's_VBD
+      2 's_VBP
+      1 's_VBZ
+     13 've_VB
+      1 've_VBN
+   5266 've_VBP
+
+Note that a number of these categories break down perfectly:
+
+'d: MD = would, VBD = had
+
+'s: BES = is, HVS = has, POS = genitive, PRP = us (let's), the
+    remaining nouns (NNP, NNPS, NNS) are likely mistakes tagging "us",
+    the remaining verbs (VBD, VBP, VBZ) are likely mistakes tagging
+    "is", RB is just a typo.
+
+Others: 'm, 're, and 'll are unambiguous and are tagged perfectly. 've
+	has different tags for unclear reasons, but it doesn't matter.
+
+2. Reverse the contractions in the corpus:
+./reverse_contraction.py data/swb_pos_converted.txt data/swb_pos_reversed.txt

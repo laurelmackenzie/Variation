@@ -21,22 +21,19 @@ UNAMBIG_FORMS = {
     "'re": 'are'
     }
 AMBIG_FORMS = {
-    "'s": ['has', 'is'],  # We can filter out possessive and "us" using tags
-    "'d": ['would', 'had']
+    "'s": {'HVS': 'has', 'BES': 'is', 'POS': 'GEN'},
+    "'d": {'MD': 'would', 'VBD': 'had'}
 }
-TAG_POS = 'POS'
-TAG_MODAL = 'MD'
-TAGS_US = set(['NNS', 'PRP'])  # Tags given to "us" in "let's"
     
-def process(input_path, output_path, contract_only=True):
+def process(input_path, output_path):
     """Convert the input to uncontracted output."""
     input_file = open(input_path, 'Ur')
     output_file = open(output_path, 'w')
 
     total_lines = 0
-    contractions = 0
-    ambig_contractions = 0
+    contraction_counts = Counter()
     for line in input_file:
+        bad_line = False
         total_lines += 1
         tokens, tags = zip(*[_split_token(token)
                              for token in line.rstrip().split(" ")])
@@ -45,36 +42,37 @@ def process(input_path, output_path, contract_only=True):
             if token not in CONTRACTIONS:
                 continue
 
-            # Count the contraction
-            contractions += 1
-
             # Map it to its original form
             if token in UNAMBIG_FORMS:
-                tokens[idx] = UNAMBIG_FORMS[token]
+                new_token = UNAMBIG_FORMS[token]
+                tokens[idx] = new_token
+                contraction_counts[(token, new_token)] += 1
             else:
                 tag = tags[idx]
                 # Resolve ambiguities
-                if token == CONTR_S:
-                    # Possessive and us can be identified by tag
-                    if tag == TAG_POS:
-                        tokens[idx] = TAG_POS
-                        continue
-                    elif tag in TAGS_US:
-                        tokens[idx] = "us"
-                        continue
-
-                    # Otherwise, disambiguate between is/has
-                    ambig_contractions += 1
-                elif token == CONTR_D:
-                    ambig_contractions += 1
-                else:
+                try:
+                    disambig = AMBIG_FORMS[token]
+                except KeyError:
                     raise ValueError("Unhandled form: {!r}".format(token))
+                # If there are any misses at this point, it is
+                # intentional. The input must be mistagged to cause
+                # this.
+                try:
+                    new_token = disambig[tag]
+                except KeyError:
+                    # Exclude this utterance
+                    bad_line = True
+                    break
+                tokens[idx] = new_token
+                contraction_counts[(token, new_token)] += 1
 
-        print >> output_file, " ".join(tokens)
+        if not bad_line:
+            print >> output_file, " ".join(tokens)
 
     print "Total lines:", total_lines
-    print "Contractions:", contractions
-    print "Amibguous contractions:", ambig_contractions
+    print "Contractions:", sum(contraction_counts.values())
+    for (token, new_token), count in sorted(contraction_counts.items()):
+        print "{} -> {}: {}".format(token, new_token, count)
 
 
 def _split_token(token):
