@@ -34,7 +34,6 @@ def process(input_path, output_path):
     contraction_counts = Counter()
     for line in input_file:
         bad_line = False
-        total_lines += 1
         tokens, tags = zip(*[_split_token(token)
                              for token in line.rstrip().split(" ")])
         tokens = list(tokens)  # tokens needs to be mutable
@@ -67,6 +66,7 @@ def process(input_path, output_path):
                 contraction_counts[(token, new_token)] += 1
 
         if not bad_line:
+            total_lines += 1
             print >> output_file, " ".join(tokens)
 
     print "Total lines:", total_lines
