@@ -11,11 +11,18 @@ hiw.NP$WORD = recontrast(hiw.NP$WORD)
 hiw.NP$DOB = scale(hiw.NP$DOB, scale = FALSE)
 # Add the general code of number of function words as the sum of monosyllabic and multisyllabic
 hiw.NP$NO_FUNC_WORDS = hiw.NP$NO_FUNC_WORDS_MONO + hiw.NP$NO_FUNC_WORDS_MULTI
-# Compute information metrics
-hiw.NP$PFORWARD = -log2(hiw.NP$PFORWARD)
-hiw.NP$PBACKWARD = -log2(hiw.NP$PBACKWARD)
+# NA out unreliable indicators
+hiw.NP$PFORWARD[hiw.NP$PFORWARD_COUNT < 5 | hiw.NP$PFORWARD == 0.0] <- NA
+hiw.NP$PBACKWARD[hiw.NP$PBACKWARD_COUNT < 5 | hiw.NP$PBACKWARD == 0.0] <- NA
+hiw.NP$PHOST[hiw.NP$PHOST == 0.0] <- NA
+hiw.NP$PAFTER[hiw.NP$PAFTER == 0.0] <- NA
+# Convert information predictors
+hiw.NP$PFORWARD = log2(hiw.NP$PFORWARD)
+hiw.NP$PBACKWARD = log2(hiw.NP$PBACKWARD)
 hiw.NP$PHOST = log2(hiw.NP$PHOST)
 hiw.NP$PAFTER = log2(hiw.NP$PAFTER)
+# Subset to that where all information is defined
+hiw.NP <- subset(hiw.NP, !is.na(PFORWARD) & !is.na(PBACKWARD) & !is.na(PHOST) & !is.na(PAFTER))
 summary(hiw.NP)
 
 # Get the correlations
@@ -27,14 +34,14 @@ hiw.NP.corr$NO_PHON_WORDS = log2(hiw.NP.corr$NO_PHON_WORDS)
 hiw.NP.corr$NO_FUNC_WORDS = log2(hiw.NP.corr$NO_FUNC_WORDS + 1)
 hiw.NP.corr$NO_FUNC_WORDS_MONO = log2(hiw.NP.corr$NO_FUNC_WORDS_MONO + 1)
 hiw.NP.corr$NO_FUNC_WORDS_MULTI = log2(hiw.NP.corr$NO_FUNC_WORDS_MULTI + 1)
-cor(hiw.NP.corr)
+cor(hiw.NP.corr, use = "complete.obs")
 write.csv(cor(hiw.NP.corr), "corr.csv")
 # Check again on the subset that has parses
 hiw.NP.corr2 = subset(hiw.NP, !is.na(SUBJ_DEPTH), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER))
 cor(hiw.NP.corr2, method="spearman")
 
 # A base model
-hiw.NP.NO_WORDS.lme = glmer(NEWTWO ~ log2(NO_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + PFORWARD + PBACKWARD + PHOST + PAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+hiw.NP.NO_WORDS.lme = glmer(NEWTWO ~ log2(NO_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + PFORWARD + PBACKWARD + PHOST + PAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
 summary(hiw.NP.NO_WORDS.lme)
 
 # Model without subject length but with probability/frequency
@@ -145,3 +152,8 @@ func = ggplot(hiw.NP, aes(NO_FUNC_WORDS, NEWTWO)) + geom_point(aes(y = JOE), pos
 arrange(pros, func)
 
 phost = ggplot(hiw.NP, aes(PHOST, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "log2 preceding word frequency") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "frequency")
+
+# Density plots
+hiw.NP$NEWTWO_FACTOR <- as.factor(hiw.NP$NEWTWO)
+density.length <- ggplot(hiw.NP, aes(NO_WORDS)) + geom_density(aes(fill = NEWTWO_FACTOR), alpha = 0.75, position = "fill", adjust = 3) + scale_fill_grey(name = "Contraction") + xlab("Subject length (orthographic words)") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom")
+density.pforward <- ggplot(hiw.NP, aes(PFORWARD)) + geom_density(aes(fill = NEWTWO_FACTOR), alpha = 0.75, position = "fill", adjust = 3) + scale_fill_grey(name = "Contraction") + xlab("Forward probability of auxiliary") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom")
