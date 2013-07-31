@@ -5,7 +5,7 @@ import sys
 import csv
 from itertools import chain, ifilter
 
-from ngram import NgramModel
+from ngram import NgramModel, NoSuchContextException
 
 
 NA = "NA"
@@ -15,23 +15,15 @@ END = "END"
 
 def train(train_file):
     """Return the required language models trained from a file."""
-    print "Reading tokens..."
-    fake_tokens = set([BEGIN, END])
-    # First, organize by utterances
-    utt_tokens = ([BEGIN] + line.split() + [END] for line in train_file)
-    # Then, flatten it
-    tokens = chain.from_iterable(utt_tokens)
-    # Pull out just unigrams as well
-    raw_tokens = ifilter(lambda token: token not in fake_tokens, tokens)
-
-    # Compute probs
-    print "Computing unigram probabilities..."
-    unigram = NgramModel(1, raw_tokens)
-    print "Computing bigram left probabilities..."
-    bigram_left = NgramModel(2, tokens)
-    # Reverse to get right context
-    print "Computing bigram right probabilities..."
-    bigram_right = NgramModel(2, reversed(list(tokens)))
+    unigram = NgramModel(1)
+    bigram_left = NgramModel(2)
+    bigram_right = NgramModel(2)
+    print "Training language models..."
+    for line in train_file:
+        tokens = line.rstrip().split()
+        unigram.update(tokens)
+        bigram_left.update(tokens)
+        bigram_right.update(reversed(tokens))
 
     return (unigram, bigram_left, bigram_right)
 
@@ -45,7 +37,8 @@ def main():
     # Set up CSVs, doing so early just in case there's a bad path
     reader = csv.DictReader(in_file)
     out_fields = (reader.fieldnames +
-                  ["PFORWARD", "PBACKWARD", "PHOST", "PAFTER"])
+                  ["PFORWARD", "PBACKWARD", "PFORWARD_COUNT",
+                   "PBACKWARD_COUNT", "PHOST", "PAFTER"])
     writer = csv.DictWriter(out_file, out_fields)
 
     # Train
@@ -60,8 +53,16 @@ def main():
         after = fields["FOLL_WORD"].lower()
         fields["PHOST"] = unigram.prob(host, None)
         fields["PAFTER"] = unigram.prob(after, None)
-        fields["PFORWARD"] = bigram_left.prob(target, host)
-        fields["PBACKWARD"] = bigram_right.prob(target, after)
+        try:
+            fields["PFORWARD"] = bigram_left.prob(target, (host,))
+        except NoSuchContextException:
+            fields["PFORWARD"] = "NA"
+        fields["PFORWARD_COUNT"] = bigram_left.context_count((host,))
+        try:
+            fields["PBACKWARD"] = bigram_right.prob(target, (after,))
+        except NoSuchContextException:
+            fields["PBACKWARD"] = "NA"
+        fields["PBACKWARD_COUNT"] = bigram_right.context_count((after,))
 
         writer.writerow(fields)
 
