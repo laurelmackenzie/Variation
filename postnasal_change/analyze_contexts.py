@@ -22,18 +22,15 @@ August 2012
 
 from __future__ import division
 import argparse
-import random
 from collections import Counter
 from math import log, floor
+from itertools import takewhile
 
 from lexinfo.cmudictreader import CMUDict
-from eng_syll import eng_syllabify, ENG_CONSONANTS, ENG_ONSETS
-from syllabification import get_onset
 
-# Seed for replicability
-random.seed(0)
+DEBUG = False
 
-PHON_SEQUENCES = set(("ng"))
+PHON_SEQUENCES = set(("ng",))
 SUFFIX_LAST_PHONEME = {"ng": "G"}
 COUNT_CONSERVATIVE = "conservative"
 COUNT_AGGRESSIVE = "aggressive"
@@ -42,14 +39,96 @@ COUNT_FREQUENT = "frequent"
 COUNT_STRATEGIES = [COUNT_CONSERVATIVE, COUNT_AGGRESSIVE, COUNT_CAUTIOUS,
                     COUNT_FREQUENT]
 
+# General English phonological constants
+ENG_CONSONANTS = set(('B', 'CH', 'D', 'DH', 'F', 'G', 'HH',
+    'JH', 'K', 'L', 'M', 'N', 'NG', 'P', 'R', 'S', 'SH', 'T', 'TH', 'V', 'W',
+    'Y', 'Z', 'ZH'))
+ENG_VOWELS = set(('AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH',
+    'ER', 'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW'))
+ENG_ONSETS = set(
+    [(cons,) for cons in ENG_CONSONANTS] +
+    [('P', 'R'), ('T', 'R'), ('K', 'R'), ('B', 'R'),
+    ('D', 'R'), ('G', 'R'), ('F', 'R'), ('TH', 'R'), ('SH', 'R'), ('P', 'L'),
+    ('K', 'L'), ('B', 'L'), ('G', 'L'), ('F', 'L'), ('S', 'L'), ('T', 'W'),
+    ('K', 'W'), ('D', 'W'), ('S', 'W'), ('S', 'P'), ('S', 'T'), ('S', 'K'),
+    ('S', 'F'), ('S', 'M'), ('S', 'N'), ('G', 'W'), ('SH', 'W'),
+    ('S', 'P', 'R'), ('S', 'P', 'L'), ('S', 'T', 'R'), ('S', 'K', 'R'),
+    ('S', 'K', 'W'), ('S', 'K', 'L'), ('TH', 'W'), ('P', 'Y'),
+    ('K', 'Y'), ('B', 'Y'), ('F', 'Y'), ('HH', 'Y'), ('V', 'Y'), ('TH', 'Y'),
+    ('M', 'Y'), ('S', 'P', 'Y'), ('S', 'K', 'Y'), ('G', 'Y')])
+
+
+def _remove_stress(phoneme):
+    """Remove stress from a CMUDict phoneme.
+
+    >>> _remove_stress('AW1')
+    'AW'
+    >>> _remove_stress('AW0')
+    'AW'
+    >>> _remove_stress('AW')
+    'AW'
+    """
+    return "".join(char for char in phoneme if not char.isdigit())
+
+
+def _get_first_stress(phonemes):
+    """Return the first stress marker, or -1 if none found.
+
+    >>> _get_first_stress(['K', 'AA1', 'N', 'S', 'T', 'AH0', 'N', 'T', 'IY2', 'N'])
+    1
+    >>> _get_first_stress(['T', 'UW1'])
+    1
+    >>> _get_first_stress(['T', 'UW0'])
+    0
+    >>> _get_first_stress(['T', 'UW'])
+    -1
+    """
+    # pylint: disable=W0120
+    for phoneme in phonemes:
+        digits = [char for phoneme in phonemes for char in phoneme
+                  if char.isdigit()]
+        if digits:
+            return int(digits[0])
+    else:
+        return -1
+
+
+def _is_consonant(phoneme):
+    """Return whether a phoneme is a consonant.
+
+    >>> _is_consonant('K')
+    True
+    >>> _is_consonant('AW')
+    False
+    >>> _is_consonant('AW1')
+    False
+    >>> _is_consonant('AW0')
+    False
+    """
+    return phoneme in ENG_CONSONANTS
+
+
+def _get_onset(phonemes):
+    """Return all consonants that precede the first vowel.
+
+    >>> _get_onset(['K', 'AW1'])
+    ['K']
+    >>> _get_onset(['K', 'AW'])
+    ['K']
+    >>> _get_onset(['AW0', 'T'])
+    []
+    """
+    return list(takewhile(_is_consonant, phonemes))
+
+
 def tolerated_exceptions(n):
     """Compute the number of tolerated exceptions for n."""
-    return int(floor(n / log(n)))
+    return int(floor(n / log(n))) if n else 0
 
 
 def tolerated_rate(n):
     """Compute the rate of application required for a productive rule."""
-    return (1.0 - (tolerated_exceptions(n) / n))
+    return (1.0 - (tolerated_exceptions(n) / n)) if n else 0
 
 
 def is_productive(participants, exceptions):
@@ -58,7 +137,35 @@ def is_productive(participants, exceptions):
 
 
 class ExceptionCounter(object):
-    """Count exceptions given a strategy."""
+    """Count exceptions given a strategy.
+
+    >>> exc = ExceptionCounter()
+    >>> exc.count_participant('a')
+    >>> exc.count_participant('a')
+    >>> exc.count_exception('a')
+    >>> exc.count_participant('b')
+    >>> exc.count_exception('b')
+    >>> exc.count_exception('b')
+    >>> exc.count_participant('c')
+    >>> exc.count_exception('d')
+    >>> sorted(exc.participants(COUNT_CONSERVATIVE))
+    ['c']
+    >>> sorted(exc.exceptions(COUNT_CONSERVATIVE))
+    ['a', 'b', 'd']
+    >>> sorted(exc.participants(COUNT_AGGRESSIVE))
+    ['a', 'b', 'c']
+    >>> sorted(exc.exceptions(COUNT_AGGRESSIVE))
+    ['d']
+    >>> sorted(exc.participants(COUNT_CAUTIOUS))
+    ['c']
+    >>> sorted(exc.exceptions(COUNT_CAUTIOUS))
+    ['d']
+    >>> sorted(exc.participants(COUNT_FREQUENT))
+    ['a', 'c']
+    >>> sorted(exc.exceptions(COUNT_FREQUENT))
+    ['b', 'd']
+
+    """
 
     def __init__(self):
         self.exception_counts = Counter()
@@ -79,37 +186,51 @@ class ExceptionCounter(object):
 
     def exceptions(self, strategy):
         """Return the set of exceptions for the given strategy."""
-        return _compute_set(self.exception_counts, self.participant_counts, strategy)
+        if strategy == COUNT_CONSERVATIVE:
+            return set(self.exception_counts)
+        elif strategy == COUNT_AGGRESSIVE or strategy == COUNT_CAUTIOUS:
+            return set(self.exception_counts) - set(self.participant_counts)
+        elif strategy == COUNT_FREQUENT:
+            return set(_morefreq_items(self.exception_counts, self.participant_counts))
+        else:
+            raise ValueError("Unknown strategy: {}".format(strategy))
 
     def participants(self, strategy):
         """Return the set of participants for the given strategy."""
-        return _compute_set(self.participant_counts, self.exception_counts, strategy)
+        if strategy == COUNT_CONSERVATIVE or strategy == COUNT_CAUTIOUS:
+            return set(self.participant_counts) - set(self.exception_counts)
+        elif strategy == COUNT_AGGRESSIVE:
+            return set(self.participant_counts)
+        elif strategy == COUNT_FREQUENT:
+            return set(_morefreq_items(self.participant_counts, self.exception_counts))
+        else:
+            raise ValueError("Unknown strategy: {}".format(strategy))
+
+    def is_productive(self, strategy):
+        """Return whether the generalization is productive."""
+        return is_productive(len(self.participants(strategy)), len(self.exceptions(strategy)))
+
+    def tolerated_exceptions(self, strategy):
+        """Return the number of tolerated exceptions."""
+        return tolerated_exceptions(len(self.participants(strategy)) + len(self.exceptions(strategy)))
+
+    def summary(self, strategy):
+        """Return a string representing results for a strategy."""
+        n_participants = len(self.participants(strategy))
+        n_exceptions = len(self.exceptions(strategy))
+        return "\n".join(("Strategy: {}".format(strategy.capitalize()),
+                          "Participants: {}, Exceptions: {}".format(n_participants, n_exceptions),
+                          "Tolerance: {}".format(self.tolerated_exceptions(strategy)),
+                          "Productive?: {}".format(is_productive(n_participants, n_exceptions))))
+
+    def all_summary(self):
+        """Return the summary of all strategies."""
+        return "\n\n".join(self.summary(strategy) for strategy in COUNT_STRATEGIES)
 
 
-def _compute_set(main_counts, other_counts, strategy):
-    """Return the set corresponding to main_counts for the given strategy."""
-    mains = set(main_counts)
-    others = set(other_counts)
-    mains_only =  mains - others
-    if strategy == COUNT_CONSERVATIVE:
-        return mains_only
-    elif strategy == COUNT_AGGRESSIVE:
-        return mains
-    elif strategy == COUNT_CAUTIOUS:
-        return mains_only
-    elif strategy == COUNT_FREQUENT:
-        return set(item for item in main_counts if
-                   main_counts[item] > other_counts[item])
-    else:
-        raise ValueError("Unknown strategy: {}".format(strategy))
-
-def strategy_str(name, participant_set, exception_set):
-    """Return a string representing results for a strategy."""
-    n_participants = len(participant_set)
-    n_exceptions = len(exception_set)
-    return "\n".join((name, "Participants: %d, Exceptions: %d" % (n_participants, n_exceptions),
-                      "Tolerance: %d" % (tolerated_exceptions(n_participants + n_exceptions)),
-                      "Productive?: %s" % is_productive(n_participants, n_exceptions)))
+def _morefreq_items(counter1, counter2):
+    """Return the items with greater frequency in counter1 than counter2."""
+    return [item for item in counter1 if counter1[item] > counter2[item]]
 
 
 def update_stem(token, phon_sequences, postnasal_stems, stem, stem_exceptions):
@@ -149,7 +270,7 @@ def is_postnasal_stem_exception(token, phon_sequences, stems):
     return False
 
 
-def analyze(inpath, prondict, misperceive_rate, stempath):
+def analyze(inpath, prondict, stempath):
     """Analyze the given file."""
     prons = CMUDict(prondict)
     postnasal_stems = set(line.strip() for line in open(stempath, 'rU'))
@@ -157,28 +278,23 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     phase1 = ExceptionCounter()
     phase1_restrict = ExceptionCounter()
     phase2 = ExceptionCounter()
-    phrase = Counter()
-    phrase_restrict = Counter()
-    word = Counter()
-    stem = Counter()
 
     for line in infile:
         tokens = line.strip().split()
         # Count token_n, token_n+1 pairs, which excludes the last token
-        for token, next_token in zip(tokens, tokens[1:]):
-            # Get the first phoneme of the next token
-            try:
-                next_syll = eng_syllabify(prons[next_token.lower()])[0]
-                next_syll_stress = any("1" in phoneme for phoneme in next_syll)
-            except KeyError:
-                continue
+        for idx, token in enumerate(tokens):
+            token = token.lower()
+            next_token = tokens[idx + 1].lower() if idx < (len(tokens) - 1) else None
+            next_pron = prons[next_token] if next_token and next_token in prons else None
 
-            # At this point, it's okay to count the word for the stem level
-            # as there's no chance of skipping it based on pron
+            # Skip the token if there is one but no pron for it. We don't want any data
+            # that we cannot examine at the phrase level.
+            if next_token and not next_pron:
+                continue
 
             # See if it should count toward stem level
             # TODO: Figure out what's going on in the stem level
-            update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
+            # update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
 
             # Check word ending for application at word/phrase level
             token_suffix = None
@@ -186,155 +302,64 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
                 if token.endswith(suffix):
                     token_suffix = suffix
                     break # Can only end in one suffix
-
-            # If it doesn't end with a suffix of interest, it isn't a
-            # candidate at the word/stem level
-            if not token_suffix:
+            else:
+                # If it doesn't end with a suffix of interest, it isn't a
+                # candidate at the phrase or word levels
                 continue
-
-            # Always count toward the word level, as the word ends in the suffix.
-            word[token] += 1
 
             # See whether it counts toward phrase level
             # See if the last phoneme can re-syllabify to the next word
-            next_onset = get_onset(next_syll, ENG_CONSONANTS)
-            resyll_onset = tuple([SUFFIX_LAST_PHONEME[token_suffix]] + list(next_onset))
+            next_onset = _get_onset(next_pron) if next_pron else None
+            if next_onset is not None:
+                resyll_onset = tuple([SUFFIX_LAST_PHONEME[token_suffix]] + next_onset)
+                next_stress = _get_first_stress(next_pron)
 
-            # If resyllabification wouldn't bleed the deletion, it's a valid phrase level context
-            if resyll_onset not in ENG_ONSETS:
-                phrase[token] += 1
+            # Unrestricted phrase level deletion
 
+            # If unrestricted resyllabification wouldn't bleed the deletion, deletion
+            # will occur at the phrase level. next_onset = None marks phrase-final,
+            # so that always deletes.
+            if next_onset is None or resyll_onset not in ENG_ONSETS:
+                # In phase 1, this means a participant because word and phrase level deletion agree
+                phase1.count_participant(token)
+                phase1_restrict.count_participant(token)
+                if DEBUG:
+                    print "Both participant:"
+                    if next_onset:
+                        print token, next_pron
+                    else:
+                        print token
+            elif next_stress or next_onset:
+                # In restricted resyllabification, following stress or onset blocks resyllabification,
+                # so phrase-level deletion ocrrus.
+                phase1_restrict.count_participant(token)
+                # Consider restricted resyllabification, where resyllabification is blocked
+                # In the unrestricted case, this is an exception as phrase level deletion would not
+                # occur here.
+                phase1.count_exception(token)
+                if DEBUG:
+                    print "Restricted participant:"
+                    print token, next_pron
             else:
-                word_exceptions.add(token)
-                # With some probability, allow it to be heard as deleted, so it isn't counted
-                # as an exception. We express this as being counted as an exception at 1-p
-                if random.random() > misperceive_rate:
-                    word_exceptions_perceived.add(token)
+                # Resyllabification blocks deletion
+                phase1.count_exception(token)
+                phase1_restrict.count_exception(token)
+                if DEBUG:
+                    print "Exception:"
+                    print token, next_pron
 
-            # Consider where stress matters
-            # Also throw in "if there's any onset at all, don't resyll
-            if next_syll_stress or next_onset:
-                # If it can't resyllabify or the next syllable is stressed count it in the stress case
-                phrase_restrict[token] += 1
-                phrase1
-            else:
-                word_exceptions_stress.add(token)
-
-        # Count the last token (phrase-final occurrences)
-        last_token = tokens[-1]
-        for suffix in PHON_SEQUENCES:
-            if last_token.endswith(suffix):
-                # Counts toward both levels
-                phrase.add(last_token)
-                word.add(last_token)
-                # See if it should count toward stem level
-                update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
-                break # Can only end in one suffix
-
-    # Validate counts
-    assert word >= phrase, \
-        "Word contexts should be a superset of phrase contexts"
-    assert phrase <= (word | word_exceptions), \
-        "All phrase contexts should appear in the union of phrase participants and exceptions"
-
-    # Create derived sets
-    word_participants = word & phrase
-    word_participants_only = word_participants - word_exceptions
-    word_exceptions_only = word_exceptions - word_participants
-    word_both = word_exceptions & word_participants
-    assert word == (word_participants_only | word_exceptions_only | word_both), \
-        "Participants/exceptions/both should cover all word contexts"
-
-    # Handle perception/stress cases
-    word_exceptions_perceived_only = word_exceptions_perceived - word_participants
-    word_participants_stress = word & phrase_restrict
-    word_participants_stress_only = word_participants_stress - word_exceptions_stress
-    word_exceptions_stress_only = word_exceptions_stress - word_participants_stress
-    word_stress_both = word_exceptions_stress & word_participants_stress
-
-    stem_participants = stem & word
-    stem_participants_only = stem_participants - stem_exceptions
-    stem_exceptions_only = stem_exceptions - stem_participants
-    stem_both = stem_exceptions & stem_participants
-    assert stem == (stem_participants_only | stem_exceptions_only | stem_both), \
-        "Participants/exceptions/both should cover all stem contexts: %s" % (stem ^ (stem_participants_only | stem_exceptions_only | stem_both))
+            if DEBUG:
+                print
 
     # Print simple counts
-    print "Phrase participants:", len(phrase)
-    print "Phrase stress participants:", len(phrase_restrict)
+    print '*' * 20, "Phase 1 Unrestricted Resyllabification", '*' * 20
+    print phase1.all_summary()
     print
-    print "Possible word participants:", len(word)
-    print "All observed word participants:", len(word_participants)
-    print "All observed word exceptions:", len(word_exceptions)
-    print "Word participant only:", len(word_participants_only)
-    print "Word exception only:", len(word_exceptions_only)
-    print "Word exception and participant:", len(word_both)
+    print '*' * 20, "Phase 1 Restricted Resyllabification", '*' * 20
+    print phase1_restrict.all_summary()
     print
-    print "All observed word stress participants:", len(word_participants_stress)
-    print "All observed word exceptions:", len(word_exceptions_stress)
-    print "Word stress participant only:", len(word_participants_stress_only)
-    print "Word stress exception only:", len(word_exceptions_stress_only)
-    print "Word stress exception and participant:", len(word_stress_both)
-    print
-    print "Possible stem participants:", len(stem)
-    print "All observed stem participants:", len(stem_participants)
-    print "All observed stem exceptions:", len(stem_exceptions)
-    print "Stem participant only:", len(stem_participants_only)
-    print "Stem exception only:", len(stem_exceptions_only)
-    print "Stem exception and participant:", len(stem_both)
-    print
-
-
-    print '*' * 20, "Word Level", '*' * 20
-    # Remove items that were unreliable
-    print strategy_str("Strategy: Only count reliable items", word_participants_only,
-                       word_exceptions_only)
-    print
-
-    # Conservative reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when certain", word_participants_only,
-                       word_exceptions)
-    print
-
-    # Aggressive reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when possible", word_participants,
-                       word_exceptions_only)
-    print
-
-    # Aggressive reanalysis strategy with mishearing
-    print strategy_str("Strategy: Reanalyze when possible, occasionally misperceiving",
-                       word_participants, word_exceptions_perceived_only)
-    print
-
-    # Stress sensitivity
-    print strategy_str("Strategy: Only count reliable items, stress blocks resyllabification",
-                       word_participants_only, word_exceptions_stress_only)
-    print
-    print strategy_str("Strategy: Reanalyze when certain, stress blocks resyllabification",
-                       word_participants_only, word_exceptions_stress)
-    print
-    print strategy_str("Strategy: Reanalyze when possible, stress blocks resyllabification",
-                       word_participants, word_exceptions_stress_only)
-    print
-
-
-    print '*' * 20, "Stem Level", '*' * 20
-    print "All exceptions:", ", ".join(stem_exceptions)
-    # Remove items that were unreliable
-    print strategy_str("Strategy: Only count reliable items", stem_participants_only,
-                       stem_exceptions_only)
-    print
-
-    # Conservative reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when certain", stem_participants_only,
-                       stem_exceptions)
-    print
-
-    # Aggressive reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when possible", stem_participants,
-                       stem_exceptions_only)
-    print
-
+    print '*' * 20, "Phase 2", '*' * 20
+    print phase2.all_summary()
 
 
 def main():
@@ -342,11 +367,12 @@ def main():
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument('file', help='file to analyze')
     parser.add_argument('prondict', help='pronunciation dictionary in cmudict format')
-    parser.add_argument('deletion_perception_rate', type=float,
-                        help='rate at which a deletion is falsely perceived')
     parser.add_argument('stems', help='file of stems that should show postnasal delection')
+    parser.add_argument('--sum', dest='accumulate', action='store_const',
+                        const=sum, default=max,
+                        help='sum the integers (default: find the max)')
     args = parser.parse_args()
-    analyze(args.file, args.prondict, args.deletion_perception_rate, args.stems)
+    analyze(args.file, args.prondict, args.stems)
 
 
 if __name__ == "__main__":
