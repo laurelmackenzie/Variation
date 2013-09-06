@@ -21,7 +21,6 @@ August 2012
 
 
 from __future__ import division
-import sys
 import argparse
 import random
 from collections import Counter
@@ -34,8 +33,14 @@ from syllabification import get_onset
 # Seed for replicability
 random.seed(0)
 
-PHON_SEQUENCES = set(('mb', 'ng', 'mn'))
-SUFFIX_LAST_PHONEME = {'mb': 'B', 'ng': 'G', 'mn': 'N'}
+PHON_SEQUENCES = set(("ng"))
+SUFFIX_LAST_PHONEME = {"ng": "G"}
+COUNT_CONSERVATIVE = "conservative"
+COUNT_AGGRESSIVE = "aggressive"
+COUNT_CAUTIOUS = "cautious"
+COUNT_FREQUENT = "frequent"
+COUNT_STRATEGIES = [COUNT_CONSERVATIVE, COUNT_AGGRESSIVE, COUNT_CAUTIOUS,
+                    COUNT_FREQUENT]
 
 def tolerated_exceptions(n):
     """Compute the number of tolerated exceptions for n."""
@@ -51,6 +56,52 @@ def is_productive(participants, exceptions):
     """Return whether the numbers of exceptions is at or below the tolerated threshold."""
     return exceptions <= tolerated_exceptions(participants + exceptions)
 
+
+class ExceptionCounter(object):
+    """Count exceptions given a strategy."""
+
+    def __init__(self):
+        self.exception_counts = Counter()
+        self.participant_counts = Counter()
+
+    def count_exception(self, item):
+        """Count the given item as an exception."""
+        self.exception_counts[item] += 1
+
+    def count_participant(self, item):
+        """Count the given item as an exception."""
+        self.participant_counts[item] += 1
+
+    def counts(self, strategy):
+        """Return counts of (exceptions, participants) for the given strategy."""
+        return (len(self.exceptions(strategy)),
+                len(self.participants(strategy)))
+
+    def exceptions(self, strategy):
+        """Return the set of exceptions for the given strategy."""
+        return _compute_set(self.exception_counts, self.participant_counts, strategy)
+
+    def participants(self, strategy):
+        """Return the set of participants for the given strategy."""
+        return _compute_set(self.participant_counts, self.exception_counts, strategy)
+
+
+def _compute_set(main_counts, other_counts, strategy):
+    """Return the set corresponding to main_counts for the given strategy."""
+    mains = set(main_counts)
+    others = set(other_counts)
+    mains_only =  mains - others
+    if strategy == COUNT_CONSERVATIVE:
+        return mains_only
+    elif strategy == COUNT_AGGRESSIVE:
+        return mains
+    elif strategy == COUNT_CAUTIOUS:
+        return mains_only
+    elif strategy == COUNT_FREQUENT:
+        return set(item for item in main_counts if
+                   main_counts[item] > other_counts[item])
+    else:
+        raise ValueError("Unknown strategy: {}".format(strategy))
 
 def strategy_str(name, participant_set, exception_set):
     """Return a string representing results for a strategy."""
@@ -103,14 +154,14 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     prons = CMUDict(prondict)
     postnasal_stems = set(line.strip() for line in open(stempath, 'rU'))
     infile = open(inpath, 'rU')
-    phrase = set()
-    phrase_stress = set()
-    word = set()
-    stem = set()
-    word_exceptions = set()
-    word_exceptions_stress = set()
-    word_exceptions_perceived = set()
-    stem_exceptions = set()
+    phase1 = ExceptionCounter()
+    phase1_restrict = ExceptionCounter()
+    phase2 = ExceptionCounter()
+    phrase = Counter()
+    phrase_restrict = Counter()
+    word = Counter()
+    stem = Counter()
+
     for line in infile:
         tokens = line.strip().split()
         # Count token_n, token_n+1 pairs, which excludes the last token
@@ -126,6 +177,7 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
             # as there's no chance of skipping it based on pron
 
             # See if it should count toward stem level
+            # TODO: Figure out what's going on in the stem level
             update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
 
             # Check word ending for application at word/phrase level
@@ -134,21 +186,24 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
                 if token.endswith(suffix):
                     token_suffix = suffix
                     break # Can only end in one suffix
-            
+
+            # If it doesn't end with a suffix of interest, it isn't a
+            # candidate at the word/stem level
             if not token_suffix:
                 continue
 
             # Always count toward the word level, as the word ends in the suffix.
-            word.add(token)
+            word[token] += 1
 
             # See whether it counts toward phrase level
             # See if the last phoneme can re-syllabify to the next word
             next_onset = get_onset(next_syll, ENG_CONSONANTS)
             resyll_onset = tuple([SUFFIX_LAST_PHONEME[token_suffix]] + list(next_onset))
-            
+
             # If resyllabification wouldn't bleed the deletion, it's a valid phrase level context
             if resyll_onset not in ENG_ONSETS:
-                phrase.add(token)
+                phrase[token] += 1
+
             else:
                 word_exceptions.add(token)
                 # With some probability, allow it to be heard as deleted, so it isn't counted
@@ -160,7 +215,8 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
             # Also throw in "if there's any onset at all, don't resyll
             if next_syll_stress or next_onset:
                 # If it can't resyllabify or the next syllable is stressed count it in the stress case
-                phrase_stress.add(token)
+                phrase_restrict[token] += 1
+                phrase1
             else:
                 word_exceptions_stress.add(token)
 
@@ -174,13 +230,13 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
                 # See if it should count toward stem level
                 update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
                 break # Can only end in one suffix
-    
+
     # Validate counts
     assert word >= phrase, \
         "Word contexts should be a superset of phrase contexts"
     assert phrase <= (word | word_exceptions), \
         "All phrase contexts should appear in the union of phrase participants and exceptions"
-    
+
     # Create derived sets
     word_participants = word & phrase
     word_participants_only = word_participants - word_exceptions
@@ -191,7 +247,7 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
 
     # Handle perception/stress cases
     word_exceptions_perceived_only = word_exceptions_perceived - word_participants
-    word_participants_stress = word & phrase_stress
+    word_participants_stress = word & phrase_restrict
     word_participants_stress_only = word_participants_stress - word_exceptions_stress
     word_exceptions_stress_only = word_exceptions_stress - word_participants_stress
     word_stress_both = word_exceptions_stress & word_participants_stress
@@ -205,7 +261,7 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
 
     # Print simple counts
     print "Phrase participants:", len(phrase)
-    print "Phrase stress participants:", len(phrase_stress)
+    print "Phrase stress participants:", len(phrase_restrict)
     print
     print "Possible word participants:", len(word)
     print "All observed word participants:", len(word_participants)
@@ -218,7 +274,7 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     print "All observed word exceptions:", len(word_exceptions_stress)
     print "Word stress participant only:", len(word_participants_stress_only)
     print "Word stress exception only:", len(word_exceptions_stress_only)
-    print "Word stress exception and participant:", len(word_stress_both)    
+    print "Word stress exception and participant:", len(word_stress_both)
     print
     print "Possible stem participants:", len(stem)
     print "All observed stem participants:", len(stem_participants)
@@ -236,28 +292,28 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     print
 
     # Conservative reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when certain", word_participants_only, 
+    print strategy_str("Strategy: Reanalyze when certain", word_participants_only,
                        word_exceptions)
     print
 
     # Aggressive reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when possible", word_participants, 
+    print strategy_str("Strategy: Reanalyze when possible", word_participants,
                        word_exceptions_only)
     print
 
     # Aggressive reanalysis strategy with mishearing
-    print strategy_str("Strategy: Reanalyze when possible, occasionally misperceiving", 
+    print strategy_str("Strategy: Reanalyze when possible, occasionally misperceiving",
                        word_participants, word_exceptions_perceived_only)
     print
 
     # Stress sensitivity
-    print strategy_str("Strategy: Only count reliable items, stress blocks resyllabification", 
+    print strategy_str("Strategy: Only count reliable items, stress blocks resyllabification",
                        word_participants_only, word_exceptions_stress_only)
     print
-    print strategy_str("Strategy: Reanalyze when certain, stress blocks resyllabification", 
+    print strategy_str("Strategy: Reanalyze when certain, stress blocks resyllabification",
                        word_participants_only, word_exceptions_stress)
     print
-    print strategy_str("Strategy: Reanalyze when possible, stress blocks resyllabification", 
+    print strategy_str("Strategy: Reanalyze when possible, stress blocks resyllabification",
                        word_participants, word_exceptions_stress_only)
     print
 
@@ -270,12 +326,12 @@ def analyze(inpath, prondict, misperceive_rate, stempath):
     print
 
     # Conservative reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when certain", stem_participants_only, 
+    print strategy_str("Strategy: Reanalyze when certain", stem_participants_only,
                        stem_exceptions)
     print
 
     # Aggressive reanalysis strategy
-    print strategy_str("Strategy: Reanalyze when possible", stem_participants, 
+    print strategy_str("Strategy: Reanalyze when possible", stem_participants,
                        stem_exceptions_only)
     print
 
