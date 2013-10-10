@@ -368,9 +368,6 @@ def main():
     parser.add_argument('file', help='file to analyze')
     parser.add_argument('prondict', help='pronunciation dictionary in cmudict format')
     parser.add_argument('stems', help='file of stems that should show postnasal delection')
-    parser.add_argument('--sum', dest='accumulate', action='store_const',
-                        const=sum, default=max,
-                        help='sum the integers (default: find the max)')
     args = parser.parse_args()
     analyze(args.file, args.prondict, args.stems)
 
