@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 """
 Dump possible stems for the postnasal plosive deletion change.
-Constantine Lignos
-August 2012
 """
 
-# Copyright (C) 2012 Constantine Lignos
+# Copyright (C) 2012-2013 Constantine Lignos
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,24 +18,49 @@ August 2012
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+from collections import Counter
 
-words = set(word for line in sys.stdin for word in line.strip().split())
+AFFIX = "ng"
+GOLD_SUFFIXES = set([
+s,
+er,
+'s,
+ing,
+ed
+ly,
+les
+ers
+a
+es
+est
+ham
+ton
+er's
+y
+led
+os
+ling
+us
+])
+
+BAD_STEMS = set([
+'fing'
+
+words = set(line.strip().split()[1] for line in sys.stdin)
+stem_words = {}
+suffixes = Counter()
+good_suffixes
 
 for word in sorted(words):
-    # Different cases for finding stems based on suffix:
-    # 1. mb/mn: Anything that ends in these at all
-    if word.endswith('mb') or word.endswith('mn'):
-        print word
-    # -ng: Complicated because of -ing. Basically, take it
-    # if any of the following:
-    # 1. Ends in -ng but not -ing
-    # 2. Ends in -ing but the stem, stem+e, and stem - repeated last letter 
-    # are not words
-    elif ((word.endswith('ng') and not word.endswith('ing')) or
-          (word.endswith('ing') and 
-           not(word[:-3] in words or 
-               word[:-3] + 'e' in words or
-               (word[-4] == word[-5] and word[:-4] in words)))):
-        print word
+    # Find "ng" if it's there. This will find the first one, so it won't
+    # be in the suffix if there's one in the stem.
+    idx = word.find(AFFIX)
+    # If it wasn't found, or was only found at the end, skip it.
+    if idx == -1 or idx == len(word) - len(AFFIX):
+        continue
 
-        
+    suffixes[word[idx + 2:]] += 1
+
+for suff, count in suffixes.most_common():
+    print suff
+
