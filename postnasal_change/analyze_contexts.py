@@ -40,22 +40,24 @@ COUNT_STRATEGIES = [COUNT_CONSERVATIVE, COUNT_AGGRESSIVE, COUNT_CAUTIOUS,
                     COUNT_FREQUENT]
 
 # General English phonological constants
-ENG_CONSONANTS = set(('B', 'CH', 'D', 'DH', 'F', 'G', 'HH',
-    'JH', 'K', 'L', 'M', 'N', 'NG', 'P', 'R', 'S', 'SH', 'T', 'TH', 'V', 'W',
-    'Y', 'Z', 'ZH'))
-ENG_VOWELS = set(('AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH',
-    'ER', 'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW'))
+ENG_CONSONANTS = set((
+        'B', 'CH', 'D', 'DH', 'F', 'G', 'HH',
+        'JH', 'K', 'L', 'M', 'N', 'NG', 'P', 'R', 'S', 'SH', 'T', 'TH', 'V', 'W',
+        'Y', 'Z', 'ZH'))
+ENG_VOWELS = set((
+        'AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH',
+        'ER', 'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW'))
 ENG_ONSETS = set(
     [(cons,) for cons in ENG_CONSONANTS] +
     [('P', 'R'), ('T', 'R'), ('K', 'R'), ('B', 'R'),
-    ('D', 'R'), ('G', 'R'), ('F', 'R'), ('TH', 'R'), ('SH', 'R'), ('P', 'L'),
-    ('K', 'L'), ('B', 'L'), ('G', 'L'), ('F', 'L'), ('S', 'L'), ('T', 'W'),
-    ('K', 'W'), ('D', 'W'), ('S', 'W'), ('S', 'P'), ('S', 'T'), ('S', 'K'),
-    ('S', 'F'), ('S', 'M'), ('S', 'N'), ('G', 'W'), ('SH', 'W'),
-    ('S', 'P', 'R'), ('S', 'P', 'L'), ('S', 'T', 'R'), ('S', 'K', 'R'),
-    ('S', 'K', 'W'), ('S', 'K', 'L'), ('TH', 'W'), ('P', 'Y'),
-    ('K', 'Y'), ('B', 'Y'), ('F', 'Y'), ('HH', 'Y'), ('V', 'Y'), ('TH', 'Y'),
-    ('M', 'Y'), ('S', 'P', 'Y'), ('S', 'K', 'Y'), ('G', 'Y')])
+     ('D', 'R'), ('G', 'R'), ('F', 'R'), ('TH', 'R'), ('SH', 'R'), ('P', 'L'),
+     ('K', 'L'), ('B', 'L'), ('G', 'L'), ('F', 'L'), ('S', 'L'), ('T', 'W'),
+     ('K', 'W'), ('D', 'W'), ('S', 'W'), ('S', 'P'), ('S', 'T'), ('S', 'K'),
+     ('S', 'F'), ('S', 'M'), ('S', 'N'), ('G', 'W'), ('SH', 'W'),
+     ('S', 'P', 'R'), ('S', 'P', 'L'), ('S', 'T', 'R'), ('S', 'K', 'R'),
+     ('S', 'K', 'W'), ('S', 'K', 'L'), ('TH', 'W'), ('P', 'Y'),
+     ('K', 'Y'), ('B', 'Y'), ('F', 'Y'), ('HH', 'Y'), ('V', 'Y'), ('TH', 'Y'),
+     ('M', 'Y'), ('S', 'P', 'Y'), ('S', 'K', 'Y'), ('G', 'Y')])
 
 
 def _remove_stress(phoneme):
@@ -233,51 +235,15 @@ def _morefreq_items(counter1, counter2):
     return [item for item in counter1 if counter1[item] > counter2[item]]
 
 
-def update_stem(token, phon_sequences, postnasal_stems, stem, stem_exceptions):
-    """Updates stem counts for a token.
-
-    Ugly function, but better than pasting it twice.
-    """
-    # Check for whether this looks like an exception to the stem level
-    if is_postnasal_stem_exception(token, PHON_SEQUENCES, postnasal_stems):
-        stem.add(token)
-        stem_exceptions.add(token)
-    else:
-        # See if it ends in one of the sequences. This would be the
-        # same as word level, so it would not be an exception.
-        for suffix in PHON_SEQUENCES:
-            if token.endswith(suffix):
-                stem.add(token)
-                break
-
-
-_MIN_STEM_LENGTH = None
-def is_postnasal_stem_exception(token, phon_sequences, stems):
-    """Return whether postnasal deletion should apply at the stem but not the word level."""
-    # Optimization: cache the minimum stem length so we only compute it once.
-    global _MIN_STEM_LENGTH # We could do the global on the fly, but boy is that dodgy.
-    if _MIN_STEM_LENGTH is None:
-        _MIN_STEM_LENGTH = min(len(stem) for stem in stems)
-
-    # Check for whether the token starts with anything in the stems
-    stem_suffixes = ((token[:idx], token[idx:]) for idx in range(_MIN_STEM_LENGTH, len(token)))
-    for stem, suffix in stem_suffixes:
-        # 's' suffixes would trigger coda simplification, so they don't count
-        if suffix not in ('s', "'s") and stem in stems:
-            return True
-
-    # False if no matching stem was found
-    return False
-
-
 def analyze(inpath, prondict, stempath):
     """Analyze the given file."""
     prons = CMUDict(prondict)
-    postnasal_stems = set(line.strip() for line in open(stempath, 'rU'))
+    stem_words = set(line.strip() for line in open(stempath, 'rU'))
     infile = open(inpath, 'rU')
     phase1 = ExceptionCounter()
     phase1_restrict = ExceptionCounter()
     phase2 = ExceptionCounter()
+    phase2_ing = ExceptionCounter()
 
     for line in infile:
         tokens = line.strip().split()
@@ -292,20 +258,43 @@ def analyze(inpath, prondict, stempath):
             if next_token and not next_pron:
                 continue
 
-            # See if it should count toward stem level
-            # TODO: Figure out what's going on in the stem level
-            # update_stem(token, PHON_SEQUENCES, postnasal_stems, stem, stem_exceptions)
+            # If the token is a known stem exception, count it as such
+            if token in stem_words:
+                if DEBUG:
+                    print "Stem exception:"
+                    print token
+                phase2.count_exception(token)
+                phase2_ing.count_exception(token)
 
             # Check word ending for application at word/phrase level
             token_suffix = None
             for suffix in PHON_SEQUENCES:
                 if token.endswith(suffix):
                     token_suffix = suffix
-                    break # Can only end in one suffix
+                    break  # Can only end in one suffix
             else:
                 # If it doesn't end with a suffix of interest, it isn't a
                 # candidate at the phrase or word levels
                 continue
+
+            # Determine whether this has an -ing suffix and the stem
+            # is likely a real word (as opposed to string/bring).
+            if token.endswith("ing") and any(vowel in token[:-3] for vowel in "aeiou"):
+                # Tokens like "running", which would only count as
+                # participants under some analyses, but are otherwise
+                # irrelevant so are not counted.
+                if DEBUG:
+                    print "-ing stem token:"
+                    print token
+                phase2_ing.count_participant(token)
+            else:
+                # Eligible for word or stem level deletion, so will be
+                # a participant for the stem level
+                if DEBUG:
+                    print "Non-ing stem token:"
+                    print token
+                phase2.count_participant(token)
+                phase2_ing.count_participant(token)
 
             # See whether it counts toward phrase level
             # See if the last phoneme can re-syllabify to the next word
@@ -313,8 +302,6 @@ def analyze(inpath, prondict, stempath):
             if next_onset is not None:
                 resyll_onset = tuple([SUFFIX_LAST_PHONEME[token_suffix]] + next_onset)
                 next_stress = _get_first_stress(next_pron)
-
-            # Unrestricted phrase level deletion
 
             # If unrestricted resyllabification wouldn't bleed the deletion, deletion
             # will occur at the phrase level. next_onset = None marks phrase-final,
@@ -360,6 +347,9 @@ def analyze(inpath, prondict, stempath):
     print
     print '*' * 20, "Phase 2", '*' * 20
     print phase2.all_summary()
+    print
+    print '*' * 20, "Phase 2 (incluing -ing as a participant)", '*' * 20
+    print phase2_ing.all_summary()
 
 
 def main():
