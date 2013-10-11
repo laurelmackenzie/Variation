@@ -21,35 +21,10 @@ import sys
 from collections import Counter
 
 AFFIX = "ng"
-GOLD_SUFFIXES = set([
-s,
-er,
-'s,
-ing,
-ed
-ly,
-les
-ers
-a
-es
-est
-ham
-ton
-er's
-y
-led
-os
-ling
-us
-])
 
-BAD_STEMS = set([
-'fing'
 
 words = set(line.strip().split()[1] for line in sys.stdin)
-stem_words = {}
 suffixes = Counter()
-good_suffixes
 
 for word in sorted(words):
     # Find "ng" if it's there. This will find the first one, so it won't
@@ -63,4 +38,3 @@ for word in sorted(words):
 
 for suff, count in suffixes.most_common():
     print suff
-
