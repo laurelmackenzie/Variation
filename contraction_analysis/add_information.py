@@ -5,6 +5,7 @@ import sys
 import csv
 from itertools import chain, ifilter
 
+from lexinfo.subtlexreader import SubtlexDict
 from ngram import NgramModel, NoSuchContextException
 
 
@@ -18,7 +19,6 @@ def train(train_file):
     unigram = NgramModel(1)
     bigram_left = NgramModel(2)
     bigram_right = NgramModel(2)
-    print "Training language models..."
     for line in train_file:
         tokens = line.rstrip().split()
         unigram.update(tokens)
@@ -33,6 +33,7 @@ def main():
     in_file = open(sys.argv[1], "Ur")
     out_file = open(sys.argv[2], "w")
     train_file = open(sys.argv[3], "Ur")
+    subtlex_path = sys.argv[4]
 
     # Set up CSVs, doing so early just in case there's a bad path
     reader = csv.DictReader(in_file)
@@ -41,7 +42,14 @@ def main():
                    "PBACKWARD_COUNT", "PHOST", "PAFTER"])
     writer = csv.DictWriter(out_file, out_fields)
 
+    # Read frequencies
+    print "Reading frequency information..."
+    subtlex = SubtlexDict(subtlex_path)
+
+    # TODO: Use frequency information
+
     # Train
+    print "Training language models..."
     unigram, bigram_left, bigram_right = train(train_file)
 
     # Write output!
