@@ -3,30 +3,60 @@ library(ggplot2)
 
 # Load up all the data and preprocessing, etc.
 source("contraction.R")
+
 # Reduce to the subset we're looking at.
 hiw.NP = subset(hiw, NP == "NP")
+# Code response as logical in a separate column
+hiw.NP$NEWTWO.log = as.factor(hiw.NP$NEWTWO)
 # Change from treatment to sum contrasts because no one auxiliary is default
 hiw.NP$WORD = recontrast(hiw.NP$WORD) 
 # Center DOB
 hiw.NP$DOB = scale(hiw.NP$DOB, scale = FALSE)
 # Add the general code of number of function words as the sum of monosyllabic and multisyllabic
 hiw.NP$NO_FUNC_WORDS = hiw.NP$NO_FUNC_WORDS_MONO + hiw.NP$NO_FUNC_WORDS_MULTI
+# Log duration
+hiw.NP$SUBJ_DUR = log2(hiw.NP$SUBJ_DUR)
 # NA out unreliable indicators
 hiw.NP$PFORWARD[hiw.NP$PFORWARD_COUNT < 5 | hiw.NP$PFORWARD == 0.0] <- NA
 hiw.NP$PBACKWARD[hiw.NP$PBACKWARD_COUNT < 5 | hiw.NP$PBACKWARD == 0.0] <- NA
 hiw.NP$PHOST[hiw.NP$PHOST == 0.0] <- NA
 hiw.NP$PAFTER[hiw.NP$PAFTER == 0.0] <- NA
-# Convert information predictors
+# Log transform probabilities/frequencies
 hiw.NP$PFORWARD = log2(hiw.NP$PFORWARD)
 hiw.NP$PBACKWARD = log2(hiw.NP$PBACKWARD)
 hiw.NP$PHOST = log2(hiw.NP$PHOST)
 hiw.NP$PAFTER = log2(hiw.NP$PAFTER)
-# Subset to that where all information is defined
-hiw.NP <- subset(hiw.NP, !is.na(PFORWARD) & !is.na(PBACKWARD) & !is.na(PHOST) & !is.na(PAFTER))
+hiw.NP$FREQHOST = log2(hiw.NP$FREQHOST)
+# Subset again to remove any NAs from exclusions
+hiw.NP <- subset(hiw.NP, !is.na(PFORWARD) & !is.na(PBACKWARD) & !is.na(PHOST) & !is.na(PAFTER) & !is.na(FREQHOST))
 summary(hiw.NP)
 
-# Get the correlations
-hiw.NP.corr = subset(hiw.NP, !is.na(EDUC_STEP), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER))
+# Make subset with duration
+hiw.NP.dur <- subset(hiw.NP, !is.na(SUBJ_DUR))
+# Residualize, as the correlation is ~ .8
+hiw.NP.dur$rSUBJ_DUR = resid(lm(SUBJ_DUR ~ NO_WORDS, hiw.NP.dur))
+
+# Look at the strength of individual predictors
+# We should use number of words, not its log
+nwords.m <- glm(as.logical(NEWTWO) ~ NO_WORDS, hiw.NP, family = 'binomial')
+summary(nwords.m)
+nwordslog.m <- glm(NEWTWO ~ log2(NO_WORDS), hiw.NP, family = 'binomial')
+summary(nwordslog.m)
+
+# Plots of predictors
+cdplot(hiw.NP$NO_WORDS, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP.dur$SUBJ_DUR, hiw.NP.dur$NEWTWO.log)
+
+
+# Compare global versus local frequency
+# Global is *much* weaker, although both are nonsig in this analysis
+freqhost.m <- glm(NEWTWO ~ NO_WORDS + FREQHOST, hiw.NP, family = 'binomial')
+summary(freqhost.m)
+phost.m <- glm(NEWTWO ~ NO_WORDS + PHOST, hiw.NP, family = 'binomial')
+summary(phost.m)
+
+# Look at correlations between predictors
+hiw.NP.corr = subset(hiw.NP, !is.na(EDUC_STEP), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER, FREQHOST))
 # Replace some predictors with their log version, adding one if needed to prevent zeros
 hiw.NP.corr$NO_WORDS = log2(hiw.NP.corr$NO_WORDS)
 hiw.NP.corr$NO_SYLLS = log2(hiw.NP.corr$NO_SYLLS)
@@ -37,16 +67,64 @@ hiw.NP.corr$NO_FUNC_WORDS_MULTI = log2(hiw.NP.corr$NO_FUNC_WORDS_MULTI + 1)
 cor(hiw.NP.corr, use = "complete.obs")
 write.csv(cor(hiw.NP.corr), "corr.csv")
 # Check again on the subset that has parses
-hiw.NP.corr2 = subset(hiw.NP, !is.na(SUBJ_DEPTH), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER))
+hiw.NP.corr2 = subset(hiw.NP, !is.na(SUBJ_DEPTH), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER, FREQHOST))
 cor(hiw.NP.corr2, method="spearman")
 
 # A base model
-hiw.NP.NO_WORDS.lme = glmer(NEWTWO ~ log2(NO_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + PFORWARD + PBACKWARD + PHOST + PAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
-summary(hiw.NP.NO_WORDS.lme)
+nwords.base.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nwords.base.m)
+
+# Check with subject duration, note that we have to remove CORPUS as only one corpus has durations.
+nwords.dur.base.m = glmer(NEWTWO ~ NO_WORDS + rSUBJ_DUR + SPEAKING_RATE + DOB + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
+# Duration adds nothing on top of number of words!
+summary(nwords.dur.base.m)
+
+# Add in a random slope for NO_WORDS, see if it matters
+nwords.base.sm = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
+summary(nwords.base.sm)
+# It doesn't help here
+anova(nwords.base.m, nwords.base.sm)
+
+# Check again about whether we should log NO_WORDS. Again we find that we should not.
+lnwords.base.sm = glmer(NEWTWO ~ log2(NO_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (log2(NO_WORDS) | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
+summary(lnwords.base.sm)
+
+# Which is more useful: global or local frequency?
+nwords.globfreq.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
+nwords.locfreq.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + PHOST + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
+# Global frequency is actually significant (unlike local) but barely improves fit.
+summary(nwords.globfreq.m)
+summary(nwords.locfreq.m)
+anova(nwords.globfreq.m, nwords.locfreq.m)
+
+# Look at correlations among predictability predictors
+cor(subset(hiw.NP, select = c(NO_WORDS, FREQHOST, PFORWARD, PBACKWARD, PHOST, PAFTER)))
+# Residualize PHOST (local frequency) and FREQHOST (global frequency). Since FREQHOST performs better, we give it primacy.
+# It's best to not use this predictor at all; it's basically impossible to make sense of.
+hiw.NP$rPHOST = resid(lm(PHOST ~ FREQHOST, hiw.NP))
+# To be safe, we residualize all predictability measures off the frequency of the host. It isn't strictly necessary to do it to all of them, but it makes things more consistent.
+hiw.NP$rPFORWARD = resid(lm(PFORWARD ~ FREQHOST, hiw.NP))
+hiw.NP$rPBACKWARD = resid(lm(PBACKWARD ~ FREQHOST, hiw.NP))
+hiw.NP$rPAFTER = resid(lm(PAFTER ~ FREQHOST, hiw.NP))
+# Sanity check
+cor(subset(hiw.NP, select = c(NO_WORDS, FREQHOST, rPFORWARD, rPBACKWARD, rPHOST, rPAFTER)))
+
+# Add in predicability
+nwords.pred.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
+summary(nwords.pred.m)
+
+# Fit with increasing numbers of random slopes
+nwords.pred.sm1 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS | SPEAKER), hiw.NP, family = 'binomial')
+nwords.pred.sm2 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS + FREQHOST | SPEAKER), hiw.NP, family = 'binomial')
+# This cannot converge with current lme4.0
+nwords.pred.sm3 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER | SPEAKER), hiw.NP, family = 'binomial')
+# The random slopes are not useful, so we do not need to purse them further
+anova(nwords.pred.m, nwords.pred.sm1, nwords.pred.sm2)
 
 # Model without subject length but with probability/frequency
-hiw.NP.INFO.lme = glmer(NEWTWO ~ SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + PFORWARD + PBACKWARD + PHOST + PAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.INFO.lme)
+pred.m = glmer(NEWTWO ~ SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(pred.m)
+anova(pred.m, nwords.pred.m)
 
 # Different possible NO_WORDS collinear predictors
 hiw.NP.NO_SYLLS.lme = glmer(NEWTWO ~ log2(NO_SYLLS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')

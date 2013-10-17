@@ -526,6 +526,7 @@ would_NP$UNREDUC = would_NP$UNREDUC[, drop = TRUE]
 hiw = subset(NP_EX, WORD=="has"|WORD=="is"|WORD=="will")
 hiw$PREC_GRAMM_CLASS = hiw$PREC_GRAMM_CLASS[, drop = TRUE]
 hiw$WORD = hiw$WORD[, drop = TRUE]
+hiw$AUXILIARY = hiw$AUXILIARY[, drop = TRUE]
 
 #What is this, my son Tom? Why not just use NEWTWO? Why did I do this...
 hiw$RECODE_THREE <- as.numeric(hiw$THREE)
