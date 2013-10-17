@@ -43,11 +43,6 @@ summary(nwords.m)
 nwordslog.m <- glm(NEWTWO ~ log2(NO_WORDS), hiw.NP, family = 'binomial')
 summary(nwordslog.m)
 
-# Plots of predictors
-cdplot(hiw.NP$NO_WORDS, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP.dur$SUBJ_DUR, hiw.NP.dur$NEWTWO.log)
-
-
 # Compare global versus local frequency
 # Global is *much* weaker, although both are nonsig in this analysis
 freqhost.m <- glm(NEWTWO ~ NO_WORDS + FREQHOST, hiw.NP, family = 'binomial')
@@ -108,6 +103,20 @@ hiw.NP$rPBACKWARD = resid(lm(PBACKWARD ~ FREQHOST, hiw.NP))
 hiw.NP$rPAFTER = resid(lm(PAFTER ~ FREQHOST, hiw.NP))
 # Sanity check
 cor(subset(hiw.NP, select = c(NO_WORDS, FREQHOST, rPFORWARD, rPBACKWARD, rPHOST, rPAFTER)))
+
+# Plots of predictors
+cdplot(hiw.NP$NO_WORDS, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$FREQHOST, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$PHOST, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$PFORWARD, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$rPFORWARD, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$PBACKWARD, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$rPBACKWARD, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$PAFTER, hiw.NP$NEWTWO.log)
+cdplot(hiw.NP$rPAFTER, hiw.NP$NEWTWO.log)
+# Plots on data with duration
+cdplot(hiw.NP.dur$SUBJ_DUR, hiw.NP.dur$NEWTWO.log)
+cdplot(hiw.NP.dur$rSUBJ_DUR, hiw.NP.dur$NEWTWO.log)
 
 # Add in predicability
 nwords.pred.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
