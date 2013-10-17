@@ -22,7 +22,8 @@ UNAMBIG_FORMS = {
     }
 AMBIG_FORMS = {
     "'s": {'HVS': 'has', 'BES': 'is', 'POS': 'GEN'},
-    "'d": {'MD': 'would', 'VBD': 'had'}
+    # TODO: We don't know how to tell had and did apart
+    "'d": {'MD': 'would', 'VBD': 'had-did'}
 }
     
 def process(input_path, output_path):
