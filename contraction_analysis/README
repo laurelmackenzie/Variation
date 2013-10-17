@@ -1,7 +1,7 @@
 If you want to try to tag the transcripts using a standard model:
 *****************************************************************
 Preparing the transcripts for analysis:
-1. Run tag_transcripts.sh
+1. Run tag_transcripts.sh, setting MODEL to the the one that comes with the tagger.
 
 2. Analyze the contraction/tag pairs:
 grep -o -P "'(d|ll|m|s|re|ve)_\w+" data/all_trans_tagged.txt | sort | uniq -c
@@ -23,12 +23,10 @@ Some things to note:
 -'d_NNP is just a mistake ("I have a six and a half year old that'd
 probably enjoy that.").
 
--'d_VBD is mostly auxiliary (not lexical) have
+-'d_VBD is mostly auxiliary (not lexical) had
 
 -'s_NNS is an error restricted to mistagging the "us" in "let's",
  which should actually be let_VB 's_PRP.
-
--'ve appears as VP and VBP, which is somewhat odd but doesn't matter
 
 - If you actually look at the 's_POS versus 's_VBZ, it's actually
   quite bad; a lot of the POS items are actually VBZ's. Based on this
