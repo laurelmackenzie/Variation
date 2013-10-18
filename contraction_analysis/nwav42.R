@@ -2,78 +2,62 @@ library(lme4.0)
 library(ggplot2)
 
 # Load up all the data and preprocessing, etc.
-source("contraction.R")
+source("hiw.R")
 
-# Reduce to the subset we're looking at.
-hiw.NP = subset(hiw, NP == "NP")
-# Code response as logical in a separate column
-hiw.NP$NEWTWO.log = as.factor(hiw.NP$NEWTWO)
-# Change from treatment to sum contrasts because no one auxiliary is default
-hiw.NP$WORD = recontrast(hiw.NP$WORD) 
-# Center DOB
-hiw.NP$DOB = scale(hiw.NP$DOB, scale = FALSE)
-# Add the general code of number of function words as the sum of monosyllabic and multisyllabic
-hiw.NP$NO_FUNC_WORDS = hiw.NP$NO_FUNC_WORDS_MONO + hiw.NP$NO_FUNC_WORDS_MULTI
-# Log duration
-hiw.NP$SUBJ_DUR = log2(hiw.NP$SUBJ_DUR)
-# NA out unreliable indicators
-hiw.NP$PFORWARD[hiw.NP$PFORWARD_COUNT < 5 | hiw.NP$PFORWARD == 0.0] <- NA
-hiw.NP$PBACKWARD[hiw.NP$PBACKWARD_COUNT < 5 | hiw.NP$PBACKWARD == 0.0] <- NA
-hiw.NP$PHOST[hiw.NP$PHOST == 0.0] <- NA
-hiw.NP$PAFTER[hiw.NP$PAFTER == 0.0] <- NA
-# Log transform probabilities/frequencies
-hiw.NP$PFORWARD = log2(hiw.NP$PFORWARD)
-hiw.NP$PBACKWARD = log2(hiw.NP$PBACKWARD)
-hiw.NP$PHOST = log2(hiw.NP$PHOST)
-hiw.NP$PAFTER = log2(hiw.NP$PAFTER)
-hiw.NP$FREQHOST = log2(hiw.NP$FREQHOST)
-# Subset again to remove any NAs from exclusions
-hiw.NP <- subset(hiw.NP, !is.na(PFORWARD) & !is.na(PBACKWARD) & !is.na(PHOST) & !is.na(PAFTER) & !is.na(FREQHOST))
+# Show what we're working with
 summary(hiw.NP)
-
-# Make subset with duration
-hiw.NP.dur <- subset(hiw.NP, !is.na(SUBJ_DUR))
-# Residualize, as the correlation is ~ .8
-hiw.NP.dur$rSUBJ_DUR = resid(lm(SUBJ_DUR ~ NO_WORDS, hiw.NP.dur))
 
 # Look at the strength of individual predictors
 # We should use number of words, not its log
-nwords.m <- glm(as.logical(NEWTWO) ~ NO_WORDS, hiw.NP, family = 'binomial')
+nwords.m <- glm(NEWTWO ~ NO_WORDS, hiw.NP, family = 'binomial')
 summary(nwords.m)
 nwordslog.m <- glm(NEWTWO ~ log2(NO_WORDS), hiw.NP, family = 'binomial')
 summary(nwordslog.m)
-
-# Compare global versus local frequency
-# Global is *much* weaker, although both are nonsig in this analysis
-freqhost.m <- glm(NEWTWO ~ NO_WORDS + FREQHOST, hiw.NP, family = 'binomial')
-summary(freqhost.m)
-phost.m <- glm(NEWTWO ~ NO_WORDS + PHOST, hiw.NP, family = 'binomial')
-summary(phost.m)
-
-# Look at correlations between predictors
-hiw.NP.corr = subset(hiw.NP, !is.na(EDUC_STEP), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER, FREQHOST))
-# Replace some predictors with their log version, adding one if needed to prevent zeros
-hiw.NP.corr$NO_WORDS = log2(hiw.NP.corr$NO_WORDS)
-hiw.NP.corr$NO_SYLLS = log2(hiw.NP.corr$NO_SYLLS)
-hiw.NP.corr$NO_PHON_WORDS = log2(hiw.NP.corr$NO_PHON_WORDS)
-hiw.NP.corr$NO_FUNC_WORDS = log2(hiw.NP.corr$NO_FUNC_WORDS + 1)
-hiw.NP.corr$NO_FUNC_WORDS_MONO = log2(hiw.NP.corr$NO_FUNC_WORDS_MONO + 1)
-hiw.NP.corr$NO_FUNC_WORDS_MULTI = log2(hiw.NP.corr$NO_FUNC_WORDS_MULTI + 1)
-cor(hiw.NP.corr, use = "complete.obs")
-write.csv(cor(hiw.NP.corr), "corr.csv")
-# Check again on the subset that has parses
-hiw.NP.corr2 = subset(hiw.NP, !is.na(SUBJ_DEPTH), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER, FREQHOST))
-cor(hiw.NP.corr2, method="spearman")
 
 # A base model
 nwords.base.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
 summary(nwords.base.m)
 
-# Check with subject duration, note that we have to remove CORPUS as only one corpus has durations.
-nwords.dur.base.m = glmer(NEWTWO ~ NO_WORDS + rSUBJ_DUR + SPEAKING_RATE + DOB + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
-# Duration adds nothing on top of number of words!
-summary(nwords.dur.base.m)
+# Compare global versus local frequency
+# Make a subset where there are no FREQLOWHOST NAs
+hiw.NP.freqlow <- subset(hiw.NP, !is.na(FREQLOWHOST))
+# Compare global, global with only lowercase tokens counted, and local
+freqhost.m <- glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP.freqlow, family = 'binomial')
+# Marginal significance for global freq
+summary(freqhost.m)
+freqlowhost.m <- glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQLOWHOST + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP.freqlow, family = 'binomial')
+summary(freqlowhost.m)
+# Lowercase is nowhere near significant
+anova(freqhost.m, freqlowhost.m)
+phost.m <- glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + PHOST + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP.freqlow, family = 'binomial')
+# Local freq is nowhere near significant
+summary(phost.m)
+anova(freqhost.m, phost.m)
 
+# Check with subject duration, note that we have to remove CORPUS as only one corpus has durations.
+nwords.dur.base.m = glmer(NEWTWO ~ NO_WORDS + rSUBJ_DUR + SPEAKING_RATE + DOB + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP.dur, family = 'binomial')
+# Duration does add on top of number of words
+summary(nwords.dur.base.m)
+# Do another base model to compare against
+nwords.nodur.base.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP.dur, family = 'binomial')
+summary(nwords.nodur.base.m)
+# Yes, duration is useful
+anova(nwords.nodur.base.m, nwords.dur.base.m )
+
+# Is duration still useful if there's predictive info?
+nwords.nodur.pred.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP.dur, family = 'binomial')
+summary(nwords.nodur.pred.m)
+nwords.dur.pred.m = glmer(NEWTWO ~ NO_WORDS + rSUBJ_DUR + SPEAKING_RATE + DOB + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP.dur, family = 'binomial')
+# Important: note that the predictive information is much weaker in this model,
+# but that's because there's less data. These effects are weak.
+summary(nwords.dur.pred.m)
+# Yes, duraction helps the model:
+#                     Df    AIC    BIC  logLik  Chisq Chi Df Pr(>Chisq)   
+# nwords.nodur.pred.m 19 711.75 795.91 -336.87                            
+# nwords.dur.pred.m   20 705.95 794.54 -332.98 7.7954      1   0.005238 **
+anova(nwords.nodur.pred.m, nwords.dur.pred.m)
+
+# Back to the basics
 # Add in a random slope for NO_WORDS, see if it matters
 nwords.base.sm = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
 summary(nwords.base.sm)
@@ -92,62 +76,129 @@ summary(nwords.globfreq.m)
 summary(nwords.locfreq.m)
 anova(nwords.globfreq.m, nwords.locfreq.m)
 
-# Look at correlations among predictability predictors
-cor(subset(hiw.NP, select = c(NO_WORDS, FREQHOST, PFORWARD, PBACKWARD, PHOST, PAFTER)))
-# Residualize PHOST (local frequency) and FREQHOST (global frequency). Since FREQHOST performs better, we give it primacy.
-# It's best to not use this predictor at all; it's basically impossible to make sense of.
-hiw.NP$rPHOST = resid(lm(PHOST ~ FREQHOST, hiw.NP))
-# To be safe, we residualize all predictability measures off the frequency of the host. It isn't strictly necessary to do it to all of them, but it makes things more consistent.
-hiw.NP$rPFORWARD = resid(lm(PFORWARD ~ FREQHOST, hiw.NP))
-hiw.NP$rPBACKWARD = resid(lm(PBACKWARD ~ FREQHOST, hiw.NP))
-hiw.NP$rPAFTER = resid(lm(PAFTER ~ FREQHOST, hiw.NP))
-# Sanity check
-cor(subset(hiw.NP, select = c(NO_WORDS, FREQHOST, rPFORWARD, rPBACKWARD, rPHOST, rPAFTER)))
-
 # Plots of predictors
-cdplot(hiw.NP$NO_WORDS, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$FREQHOST, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$PHOST, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$PFORWARD, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$rPFORWARD, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$PBACKWARD, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$rPBACKWARD, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$PAFTER, hiw.NP$NEWTWO.log)
-cdplot(hiw.NP$rPAFTER, hiw.NP$NEWTWO.log)
+
+cdplot(hiw.NP$NO_WORDS, hiw.NP$NEWTWO.factor)
+ggplot(hiw.NP, aes(NO_WORDS)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.75, position = "fill") + scale_fill_grey(name = "Form") + theme_bw()
+
+cdplot(hiw.NP$FREQHOST, hiw.NP$NEWTWO.factor)
+cdplot(hiw.NP$PHOST, hiw.NP$NEWTWO.factor)
+cdplot(hiw.NP$PFORWARD, hiw.NP$NEWTWO.factor)
+cdplot(hiw.NP$rPFORWARD, hiw.NP$NEWTWO.factor)
+cdplot(hiw.NP$PBACKWARD, hiw.NP$NEWTWO.factor)
+cdplot(hiw.NP$rPBACKWARD, hiw.NP$NEWTWO.factor)
+cdplot(hiw.NP$PAFTER, hiw.NP$NEWTWO.factor)
+cdplot(hiw.NP$FREQAFTER, hiw.NP$NEWTWO.factor)
 # Plots on data with duration
-cdplot(hiw.NP.dur$SUBJ_DUR, hiw.NP.dur$NEWTWO.log)
-cdplot(hiw.NP.dur$rSUBJ_DUR, hiw.NP.dur$NEWTWO.log)
+cdplot(hiw.NP.dur$SUBJ_DUR, hiw.NP.dur$NEWTWO.factor)
+cdplot(hiw.NP.dur$rSUBJ_DUR, hiw.NP.dur$NEWTWO.factor)
 
 # Add in predicability
-nwords.pred.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
+nwords.pred.m = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial', na.action = na.omit)
 summary(nwords.pred.m)
 
 # Fit with increasing numbers of random slopes
-nwords.pred.sm1 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS | SPEAKER), hiw.NP, family = 'binomial')
-nwords.pred.sm2 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS + FREQHOST | SPEAKER), hiw.NP, family = 'binomial')
+nwords.pred.sm1 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS | SPEAKER), hiw.NP, family = 'binomial')
+nwords.pred.sm2 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS + FREQHOST | SPEAKER), hiw.NP, family = 'binomial')
 # This cannot converge with current lme4.0
-nwords.pred.sm3 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER | SPEAKER), hiw.NP, family = 'binomial')
+# nwords.pred.sm3 = glmer(NEWTWO ~ NO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (NO_WORDS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER | SPEAKER), hiw.NP, family = 'binomial')
 # The random slopes are not useful, so we do not need to purse them further
 anova(nwords.pred.m, nwords.pred.sm1, nwords.pred.sm2)
 
 # Model without subject length but with probability/frequency
-pred.m = glmer(NEWTWO ~ SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + rPAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+pred.m = glmer(NEWTWO ~ SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
 summary(pred.m)
 anova(pred.m, nwords.pred.m)
 
 # Different possible NO_WORDS collinear predictors
-hiw.NP.NO_SYLLS.lme = glmer(NEWTWO ~ log2(NO_SYLLS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_SYLLS.lme)
-hiw.NP.NO_PHON_WORDS.lme = glmer(NEWTWO ~ log2(NO_PHON_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_PHON_WORDS.lme)
-hiw.NP.NO_FUNC_WORDS.lme = glmer(NEWTWO ~ log2(NO_FUNC_WORDS + 1) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_FUNC_WORDS.lme)
-hiw.NP.NO_FUNC_WORDS_MONO.lme = glmer(NEWTWO ~ log2(NO_FUNC_WORDS_MONO + 1) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_FUNC_WORDS_MONO.lme)
+# Look at correlations between predictors
+hiw.NP.corr = subset(hiw.NP, !is.na(EDUC_STEP), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_NOT_FUNC_MONO_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER, FREQHOST))
+cor(hiw.NP.corr, use = "complete.obs")
+write.csv(cor(hiw.NP.corr), "corr.csv")
+# Check again on the subset that has parses
+hiw.NP.corr2 = subset(hiw.NP, !is.na(SUBJ_DEPTH), select = c(NEWTWO, NO_WORDS, NO_SYLLS, NO_PHON_WORDS, NO_FUNC_WORDS, NO_FUNC_WORDS_MONO, NO_FUNC_WORDS_MULTI, SPEAKING_RATE, PFORWARD, PBACKWARD, PHOST, PAFTER, FREQHOST))
+cor(hiw.NP.corr2, method="spearman")
 
-# Nothing goes wrong with subject duration, but we aren't dealing with that.
-#hiw.NP.SUBJ_DUR.lme = glmer(NEWTWO ~ SUBJ_DUR + DOB + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-#summary(hiw.NP.SUBJ_DUR.lme)
+# Syllables
+nsyll.pred.m = glmer(NEWTWO ~ NO_SYLLS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+lnsyll.pred.m = glmer(NEWTWO ~ log2(NO_SYLLS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nsyll.pred.m)
+summary(lnsyll.pred.m)
+# non-log is better
+anova(nsyll.pred.m, lnsyll.pred.m)
+
+# Number of phon words
+nphon.pred.m = glmer(NEWTWO ~ NO_PHON_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+lnphon.pred.m = glmer(NEWTWO ~ log2(NO_PHON_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nphon.pred.m)
+summary(lnphon.pred.m)
+# non-log is better
+anova(nphon.pred.m, lnphon.pred.m)
+
+# Based on the fact that logs are never helping for discrete length measures,
+# I stop checking it from here.
+
+# Function words
+funcmono.pred.m = glmer(NEWTWO ~ NO_FUNC_WORDS_MONO + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(funcmono.pred.m)
+
+func.pred.m = glmer(NEWTWO ~ NO_FUNC_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(func.pred.m)
+
+# "Heavy" words: everything but monosyllabic function words
+nonfuncmono.pred.m = glmer(NEWTWO ~ NO_NOT_FUNC_MONO_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nonfuncmono.pred.m)
+
+# Try both func/func_mono and phon
+# Phon + func
+nphon.nfunc.pred.m = glmer(NEWTWO ~ NO_PHON_WORDS + NO_FUNC_WORDS + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nphon.nfunc.pred.m)
+
+# Phon + func_mono
+nphon.nfuncmono.pred.m = glmer(NEWTWO ~ NO_PHON_WORDS + NO_FUNC_WORDS_MONO + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nphon.nfuncmono.pred.m)
+
+# Heavy + func_mono
+nonfuncmono.funcmono.pred.m = glmer(NEWTWO ~ NO_NOT_FUNC_MONO_WORDS + NO_FUNC_WORDS_MONO + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nonfuncmono.funcmono.pred.m)
+
+# Compare models
+# Why are these better than number of words?
+anova(nwords.pred.m, nsyll.pred.m)
+anova(nwords.pred.m, nphon.pred.m)
+anova(nwords.pred.m, func.pred.m)
+anova(nwords.pred.m, funcmono.pred.m)
+anova(nwords.pred.m, nonfuncmono.pred.m)
+
+# Is adding func on top of number of phon words useful?
+#                    Df    AIC    BIC  logLik  Chisq Chi Df Pr(>Chisq)  
+# nphon.pred.m       21 1165.2 1268.2 -561.61                           
+# nphon.nfunc.pred.m 22 1161.3 1269.2 -558.66 5.8993      1    0.01515 *
+anova(nphon.pred.m, nphon.nfunc.pred.m)
+# But is it better than just number of words?
+# This is nested because of the way the counts of func/phono work:
+# n_words = n_phon + n_func
+# No, it isn't:
+#                    Df    AIC    BIC  logLik  Chisq Chi Df Pr(>Chisq)
+# nwords.pred.m      21 1272.7 1377.4 -615.37                         
+# nphon.nfunc.pred.m 22 1273.2 1382.9 -614.63 1.4798      1     0.2238
+anova(nwords.pred.m, nphon.nfunc.pred.m)
+# This isn't properly nested, but worth checking for kicks
+anova(nwords.pred.m, nphon.nfuncmono.pred.m)
+# Just to compare whether mono was useful, it is.
+anova(nphon.nfunc.pred.m, nphon.nfuncmono.pred.m)
+
+# Heavies and non-heavies
+# Yes, this is useful!
+anova(nonfuncmono.pred.m, nonfuncmono.funcmono.pred.m)
+# Was it better than number of words? NOPE
+#                             Df    AIC    BIC  logLik  Chisq Chi Df Pr(>Chisq)
+# nwords.pred.m               21 1272.7 1377.4 -615.37                         
+# nonfuncmono.funcmono.pred.m 22 1274.6 1384.3 -615.32 0.0913      1     0.7625
+anova(nwords.pred.m, nonfuncmono.funcmono.pred.m)
+
+# Rewritten to here
+# *********************************************
 
 # Residualization off of N_WORDS
 NO_SYLLS_rwords = lm(log2(NO_SYLLS) ~ log2(NO_WORDS), hiw.NP)$resid
