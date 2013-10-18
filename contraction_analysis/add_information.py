@@ -26,6 +26,27 @@ def train(train_file):
     return (unigram, bigram_left, bigram_right)
 
 
+def get_subtlex_freq(word, subtlex):
+    """Return the SUBTLEX frequencies (all, lowercase) of a word, or NA if there is none."""
+    # Figure out whether the entry in SUBTLEX is capitalized or not
+    # and capitalize if needed
+    word_key = word
+    if word_key not in subtlex:
+        word_key_caps = word_key.capitalize()
+        word_key = word_key_caps if word_key_caps in subtlex else None
+    # Put in zeroes if we don't know the frequency. These will
+    # become NAs in a second. We put in zero instead of NA so that
+    # the later pass will catch words in SUBTLEX but with
+    # freq_count_low == 0 and freq_count > 0
+    freq = subtlex[word_key].freq_count if word_key else 0
+    freq_low = subtlex[word_key].freq_count_low if word_key else 0
+
+    # Write NAs if needed
+    freq = freq if freq else NA
+    freq_low = freq_low if freq_low else NA
+    return (freq, freq_low)
+
+
 def main():
     """Fill in parse trees in the CSV."""
     try:
@@ -45,7 +66,8 @@ def main():
     reader = csv.DictReader(in_file)
     out_fields = (reader.fieldnames +
                   ["PFORWARD", "PBACKWARD", "PFORWARD_COUNT",
-                   "PBACKWARD_COUNT", "PHOST", "PAFTER", "FREQHOST"])
+                   "PBACKWARD_COUNT", "PHOST", "PAFTER", "FREQHOST", "FREQLOWHOST",
+                   "FREQAFTER", "FREQLOWAFTER"])
     writer = csv.DictWriter(out_file, out_fields)
 
     # Read frequencies
@@ -76,10 +98,8 @@ def main():
             fields["PBACKWARD"] = NA
         fields["PBACKWARD_COUNT"] = bigram_right.context_count((after,))
 
-        try:
-            fields["FREQHOST"] = subtlex[host].freq_count_low
-        except KeyError:
-            fields["FREQHOST"] = NA
+        fields["FREQHOST"], fields["FREQLOWHOST"] = get_subtlex_freq(host, subtlex)
+        fields["FREQAFTER"], fields["FREQLOWAFTER"] = get_subtlex_freq(after, subtlex)
 
         writer.writerow(fields)
 
