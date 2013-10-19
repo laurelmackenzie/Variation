@@ -163,86 +163,55 @@ nonfuncmono.funcmono.pred.m = glmer(NEWTWO ~ NO_NOT_FUNC_MONO_WORDS + NO_FUNC_WO
 summary(nonfuncmono.funcmono.pred.m)
 
 # Compare models
-# Why are these better than number of words?
+# These are not nested model comparisons, just checking out the differences
 anova(nwords.pred.m, nsyll.pred.m)
 anova(nwords.pred.m, nphon.pred.m)
 anova(nwords.pred.m, func.pred.m)
 anova(nwords.pred.m, funcmono.pred.m)
+
+# Decomposition of no_words, this is a nested comparison
 anova(nwords.pred.m, nonfuncmono.pred.m)
 
 # Is adding func on top of number of phon words useful?
-#                    Df    AIC    BIC  logLik  Chisq Chi Df Pr(>Chisq)  
-# nphon.pred.m       21 1165.2 1268.2 -561.61                           
 # nphon.nfunc.pred.m 22 1161.3 1269.2 -558.66 5.8993      1    0.01515 *
 anova(nphon.pred.m, nphon.nfunc.pred.m)
 # But is it better than just number of words?
 # This is nested because of the way the counts of func/phono work:
 # n_words = n_phon + n_func
-# No, it isn't:
-#                    Df    AIC    BIC  logLik  Chisq Chi Df Pr(>Chisq)
-# nwords.pred.m      21 1272.7 1377.4 -615.37                         
-# nphon.nfunc.pred.m 22 1273.2 1382.9 -614.63 1.4798      1     0.2238
 anova(nwords.pred.m, nphon.nfunc.pred.m)
 # This isn't properly nested, but worth checking for kicks
 anova(nwords.pred.m, nphon.nfuncmono.pred.m)
-# Just to compare whether mono was useful, it is.
+# Just to compare whether mono was useful.
 anova(nphon.nfunc.pred.m, nphon.nfuncmono.pred.m)
 
 # Heavies and non-heavies
 # Yes, this is useful!
 anova(nonfuncmono.pred.m, nonfuncmono.funcmono.pred.m)
-# Was it better than number of words? NOPE
-#                             Df    AIC    BIC  logLik  Chisq Chi Df Pr(>Chisq)
-# nwords.pred.m               21 1272.7 1377.4 -615.37                         
-# nonfuncmono.funcmono.pred.m 22 1274.6 1384.3 -615.32 0.0913      1     0.7625
+# Was it better than number of words?
 anova(nwords.pred.m, nonfuncmono.funcmono.pred.m)
 
-# Rewritten to here
+# Residualize predictors and add to NO_WORDS
 # *********************************************
 
 # Residualization off of N_WORDS
-NO_SYLLS_rwords = lm(log2(NO_SYLLS) ~ log2(NO_WORDS), hiw.NP)$resid
-NO_PHON_WORDS_rwords = lm(log2(NO_PHON_WORDS) ~ log2(NO_WORDS), hiw.NP)$resid
-NO_FUNC_WORDS_rwords = lm(log2(NO_FUNC_WORDS + 1) ~ log2(NO_WORDS), hiw.NP)$resid
+rNO_SYLLS = resid(lm(log2(NO_SYLLS) ~ log2(NO_WORDS), hiw.NP))
+rNO_PHON_WORDS = resid(lm(log2(NO_PHON_WORDS) ~ log2(NO_WORDS), hiw.NP))
+rNO_FUNC_WORDS = resid(lm(log2(NO_FUNC_WORDS + 1) ~ log2(NO_WORDS), hiw.NP))
 
-# N_WORDS plus each of the resids (or func words multi which didn't need to be residualized)
-hiw.NP.NO_WORDS_SYLLS.lme = glmer(NEWTWO ~ log2(NO_WORDS) + NO_SYLLS_rwords + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_WORDS_SYLLS.lme)
-hiw.NP.NO_WORDS_PHON.lme = glmer(NEWTWO ~ log2(NO_WORDS) + NO_PHON_WORDS_rwords + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_WORDS_PHON.lme)
-hiw.NP.NO_WORDS_FUNC.lme = glmer(NEWTWO ~ log2(NO_WORDS) + NO_FUNC_WORDS_rwords + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_WORDS_FUNC.lme)
-hiw.NP.NO_WORDS_FUNC_MULTI.lme = glmer(NEWTWO ~ log2(NO_WORDS) + log2(NO_FUNC_WORDS_MULTI + 1) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_WORDS_FUNC_MULTI.lme)
+# N_WORDS plus each of the resids
+nwords.nsylls.pred.m = glmer(NEWTWO ~ NO_WORDS + rNO_SYLLS+ SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nwords.nsylls.pred.m)
 
-# Residualization of N_WORDS against each
-# Sylls
-NO_WORDS_rsylls = lm(log2(NO_WORDS) ~ log2(NO_SYLLS), hiw.NP)$resid
-hiw.NP.NO_SYLLS_WORDS.lme = glmer(NEWTWO ~ log2(NO_SYLLS) + NO_WORDS_rsylls + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_SYLLS_WORDS.lme)
-# Phon words
-NO_WORDS_rphon = lm(log2(NO_WORDS) ~ log2(NO_PHON_WORDS), hiw.NP)$resid
-hiw.NP.NO_PHON_WORDS.lme = glmer(NEWTWO ~ log2(NO_PHON_WORDS) + NO_WORDS_rphon + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_PHON_WORDS.lme)
-# Func words
-NO_WORDS_rfunc = lm(log2(NO_WORDS) ~ log2(NO_FUNC_WORDS + 1), hiw.NP)$resid
-hiw.NP.NO_FUNC_WORDS.lme = glmer(NEWTWO ~ log2(NO_FUNC_WORDS + 1) + NO_WORDS_rfunc + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_FUNC_WORDS.lme)
-hiw.NP.NO_FUNC_WORDS.lme = glmer(NEWTWO ~ log2(NO_FUNC_WORDS + 1) + log2(NO_FUNC_WORDS_MULTI + 1) + NO_WORDS_rfunc + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_FUNC_WORDS.lme)
+nwords.nphon.pred.m = glmer(NEWTWO ~ NO_WORDS + rNO_PHON_WORDS+ SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nwords.nphon.pred.m)
 
-# Func and phon together
-NO_WORDS_FUNC_rphon = lm(log2(NO_FUNC_WORDS + 1) ~ log2(NO_PHON_WORDS), hiw.NP)$resid
-hiw.NP.NO_PHON_FUNC.lme = glmer(NEWTWO ~ log2(NO_PHON_WORDS) + NO_WORDS_FUNC_rphon + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_PHON_FUNC.lme)
-# Reverse order to see coefficient
-NO_PHON_WORD_rfunc = lm(log2(NO_PHON_WORDS) ~ log2(NO_FUNC_WORDS + 1), hiw.NP)$resid
-hiw.NP.NO_FUNC_PHON.lme = glmer(NEWTWO ~ log2(NO_FUNC_WORDS + 1) + NO_PHON_WORD_rfunc + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_FUNC_PHON.lme)
+nwords.nfunc.pred.m = glmer(NEWTWO ~ NO_WORDS + rNO_FUNC_WORDS+ SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + FREQHOST + rPFORWARD + rPBACKWARD + FREQAFTER + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
+summary(nwords.nfunc.pred.m)
 
-# WIN
-hiw.NP.NO_PHON_FUNC_WORDS.lme = glmer(NEWTWO ~ log2(NO_PHON_WORDS) + NO_WORDS_FUNC_rphon + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
-summary(hiw.NP.NO_PHON_FUNC_WORDS.lme)
+# Do adding these to n_words help?
+anova(nwords.pred.m, nwords.nsylls.pred.m)
+anova(nwords.pred.m, nwords.nphon.pred.m)
+anova(nwords.pred.m, nwords.nfunc.pred.m)
 
 # Word model for comparison
 hiw.NP.NO_WORDS_BASIC.lme = glmer(NEWTWO ~ log2(NO_WORDS) + SPEAKING_RATE + DOB + CORPUS + SEX + EDUC_STEP + WORD + CV + PREC_STRESS + (1 | PREC_WORD) + (1 | FOLL_WORD) + (1 | DIALECT) + (1 | SPEAKER), hiw.NP, family = 'binomial')
@@ -271,15 +240,7 @@ summary(hiw.NP.NO_PHON_SYLL_WORDS.lme)
 hiw.NP$JOE = 1.1
 hiw.NP[hiw.NP$NEWTWO == 0,]$JOE = -.1
 
-# PLOT PARTY
-#orthographic words
-ortho = ggplot(hiw.NP, aes(log2(NO_WORDS), NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "number of orthographic words") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "orthographic words")
-#pros words
-pros = ggplot(hiw.NP, aes(NO_PHON_WORDS, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(limits = c(1,10), name = "number of prosodic words") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "prosodic words")
-#sylls
-sylls = ggplot(hiw.NP, aes(NO_SYLLS, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "number of syllables") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "syllables")
-#speaking rate (n.s.)
-ggplot(hiw.NP, aes(SPEAKING_RATE, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "speaking rate") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "speaking rate (words/sec)")
+
 #subject depth
 depth = ggplot(hiw.NP, aes(SUBJ_DEPTH, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "height of parse") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "height")
 pdf("gurt_predictor_plots.pdf", width = 9, height = 6.5)
@@ -292,6 +253,32 @@ arrange(pros, func)
 phost = ggplot(hiw.NP, aes(PHOST, NEWTWO)) + geom_point(aes(y = JOE), position=position_jitter(width = 0.2, height = .1), alpha = .5) + stat_smooth(method="glm", family ="binomial", fullrange=TRUE, colour = "black") + scale_x_continuous(name = "log2 preceding word frequency") + scale_y_continuous(breaks = (0:5)/5, name = "") + theme_bw(base_size=14) + opts(legend.position = "none", title = "frequency")
 
 # Density plots
-hiw.NP$NEWTWO_FACTOR <- as.factor(hiw.NP$NEWTWO)
-density.length <- ggplot(hiw.NP, aes(NO_WORDS)) + geom_density(aes(fill = NEWTWO_FACTOR), alpha = 0.75, position = "fill", adjust = 3) + scale_fill_grey(name = "Contraction") + xlab("Subject length (orthographic words)") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom")
-density.pforward <- ggplot(hiw.NP, aes(PFORWARD)) + geom_density(aes(fill = NEWTWO_FACTOR), alpha = 0.75, position = "fill", adjust = 3) + scale_fill_grey(name = "Contraction") + xlab("Forward probability of auxiliary") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom")
+# It would make sense to make this a function, but the way ggplot binds
+# the column names makes this difficult
+(density.length <- ggplot(hiw.NP, aes(NO_WORDS)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2, kernel = "gaussian") + scale_fill_grey(name = "Contraction") + xlab("Subject length (orthographic words)") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("nword_density.pdf", width = 6, height = 4)
+(density.pforward <- ggplot(hiw.NP, aes(PFORWARD)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("Forward probability of auxiliary (log base 2)") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("pforward_density.pdf", width = 6, height = 4)
+(density.pbackward <- ggplot(hiw.NP, aes(PBACKWARD)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("Backward probability of auxiliary (log base 2)") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("pbackward_density.pdf", width = 6, height = 4)
+(density.freqhost <- ggplot(hiw.NP, aes(FREQHOST)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("SUBTLEX frequency of host (log base 2)") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("freqhost_density.pdf", width = 6, height = 4)
+(density.freqafter <- ggplot(hiw.NP, aes(FREQAFTER)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("SUBTLEX frequency of following word (log base 2)") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("freqafter_density.pdf", width = 6, height = 4)
+(density.nsyll <- ggplot(hiw.NP, aes(NO_SYLLS)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("Number of syllables") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("nsyll_density.pdf", width = 6, height = 4)
+(density.nphon <- ggplot(hiw.NP, aes(NO_PHON_WORDS)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("Number of prosodic words") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("nphon_density.pdf", width = 6, height = 4)
+(density.nfunc <- ggplot(hiw.NP, aes(NO_FUNC_WORDS)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("Number of function words") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("nfunc_density.pdf", width = 6, height = 4)
+
+# Syntax
+(density.depth <- ggplot(hiw.NP, aes(SUBJ_DEPTH)) + geom_density(aes(fill = NEWTWO.factor), alpha = 0.5, position = "fill", adjust = 2) + scale_fill_grey(name = "Contraction") + xlab("Subject parse height") + ylab("Probability of contraction") + theme_bw() + theme(legend.position = "bottom"))
+ggsave("depth_density.pdf", width = 6, height = 4)
+
+# Predictor impact analysis
+# Odds ratio of NO_WORDS, useful range of 1-7
+1 / (exp(fixef(nwords.pred.m)['NO_WORDS'])^6)
+# From "Communism is" to "work is", taking inverse because we want
+# the opposite direction of the predictor (high to low, not low to high)
+exp(fixef(nwords.pred.m)['rPFORWARD'])^log2(0.363636363636364/0.007878447)
