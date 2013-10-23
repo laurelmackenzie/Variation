@@ -238,7 +238,8 @@ def _morefreq_items(counter1, counter2):
 def analyze(inpath, prondict, stempath):
     """Analyze the given file."""
     prons = CMUDict(prondict)
-    stem_words = set(line.strip() for line in open(stempath, 'rU'))
+    word_stems = dict(line.rstrip().split(',')
+                      for line in open(stempath, 'rU'))
     infile = open(inpath, 'rU')
     phase1 = ExceptionCounter()
     phase1_restrict = ExceptionCounter()
@@ -259,12 +260,15 @@ def analyze(inpath, prondict, stempath):
                 continue
 
             # If the token is a known stem exception, count it as such
-            if token in stem_words:
+            counted_stem = False
+            if token in word_stems:
+                stem = word_stems[token]
                 if DEBUG:
                     print "Stem exception:"
-                    print token
-                phase2.count_exception(token)
-                phase2_ing.count_exception(token)
+                    print token, stem
+                phase2.count_exception(stem)
+                phase2_ing.count_exception(stem)
+                counted_stem = True
 
             # Check word ending for application at word/phrase level
             token_suffix = None
@@ -275,23 +279,26 @@ def analyze(inpath, prondict, stempath):
             else:
                 # If it doesn't end with a suffix of interest, it isn't a
                 # candidate at the phrase or word levels
+                if DEBUG and counted_stem:
+                    print
                 continue
 
             # Determine whether this has an -ing suffix and the stem
             # is likely a real word (as opposed to string/bring).
-            if token.endswith("ing") and any(vowel in token[:-3] for vowel in "aeiou"):
+            if (not counted_stem and token.endswith("ing") and
+                    any(vowel in token[:-3] for vowel in "aeiouy")):
                 # Tokens like "running", which would only count as
                 # participants under some analyses, but are otherwise
                 # irrelevant so are not counted.
                 if DEBUG:
-                    print "-ing stem token:"
+                    print "-ing stem participant:"
                     print token
                 phase2_ing.count_participant(token)
-            else:
+            elif not counted_stem:
                 # Eligible for word or stem level deletion, so will be
                 # a participant for the stem level
                 if DEBUG:
-                    print "Non-ing stem token:"
+                    print "Bare stem participant:"
                     print token
                 phase2.count_participant(token)
                 phase2_ing.count_participant(token)
@@ -311,7 +318,7 @@ def analyze(inpath, prondict, stempath):
                 phase1.count_participant(token)
                 phase1_restrict.count_participant(token)
                 if DEBUG:
-                    print "Both participant:"
+                    print "Phrase both participant:"
                     if next_onset:
                         print token, next_pron
                     else:
@@ -325,31 +332,35 @@ def analyze(inpath, prondict, stempath):
                 # occur here.
                 phase1.count_exception(token)
                 if DEBUG:
-                    print "Restricted participant:"
+                    print "Phrase restricted participant:"
                     print token, next_pron
             else:
                 # Resyllabification blocks deletion
                 phase1.count_exception(token)
                 phase1_restrict.count_exception(token)
                 if DEBUG:
-                    print "Exception:"
+                    print "Phrase exception:"
                     print token, next_pron
 
             if DEBUG:
                 print
 
     # Print simple counts
-    print '*' * 20, "Phase 1 Unrestricted Resyllabification", '*' * 20
-    print phase1.all_summary()
-    print
-    print '*' * 20, "Phase 1 Restricted Resyllabification", '*' * 20
-    print phase1_restrict.all_summary()
-    print
-    print '*' * 20, "Phase 2", '*' * 20
-    print phase2.all_summary()
-    print
-    print '*' * 20, "Phase 2 (incluing -ing as a participant)", '*' * 20
-    print phase2_ing.all_summary()
+    name_counters = (
+        ("Phase 1 Unrestricted Resyllabification", phase1),
+        ("Phase 1 Restricted Resyllabification", phase1_restrict),
+        ("Phase 2", phase2),
+        ("Phase 2 (incluing -ing as a participant)", phase2_ing))
+
+    for name, counter in name_counters:
+        print '*' * 20, name, '*' * 20
+        print counter.all_summary()
+        print
+
+    # Print info about stems since it's so short
+    print "Stem exceptions counts (Phase 2, no -ing):"
+    for item, count in phase2.exception_counts.most_common():
+        print item, count
 
 
 def main():

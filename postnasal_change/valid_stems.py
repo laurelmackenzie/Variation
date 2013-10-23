@@ -37,6 +37,13 @@ GOLD_SUFFIXES = \
         "y",
         ])
 
+# These represent forms in which the /g/ appears among multiple
+# word-level affixes
+BAD_SUFFIXES = \
+    set([
+        "ingly",
+        ])
+
 BAD_STEMS = \
     set([
         "fing",  # finger
@@ -74,13 +81,14 @@ for word in sorted(words):
         continue
 
     # Skip bad stems, or compounds that end in the bad stems (e.g.,
-    # blackfinger)
+    # blackfinger), or bad suffixes
     stem = word[:-len(suffix)]
-    if stem in BAD_STEMS or any(stem.endswith(bad) for bad in BAD_STEMS):
+    if (stem in BAD_STEMS or any(stem.endswith(bad) for bad in BAD_STEMS) or
+            any(word.endswith(bad) for bad in BAD_SUFFIXES)):
         continue
 
     # Record it if the suffix is good
     if suffix in GOLD_SUFFIXES:
-        print word
+        print ",".join((word, stem))
         stem_words[stem].append(word)
         suffixes[suffix] += 1
