@@ -63,6 +63,10 @@ BAD_STEMS = \
         "challeng", # challenging
         ])
 
+BAD_WORDS = \
+    set([
+        "dingy",  # Can't block ding, as dinging is good
+        ])
 
 words = set(line.strip().split()[1] for line in sys.stdin)
 # These data structures are for debugging only
@@ -70,6 +74,9 @@ stem_words = defaultdict(list)
 suffixes = Counter()
 
 for word in sorted(words):
+    if word in BAD_WORDS:
+        continue
+
     # Find "ng" if it's there. This will find the first one, so it won't
     # be in the suffix if there's one in the stem.
     idx = word.find(TARGET)

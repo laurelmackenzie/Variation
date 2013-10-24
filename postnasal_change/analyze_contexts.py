@@ -59,6 +59,9 @@ ENG_ONSETS = set(
      ('K', 'Y'), ('B', 'Y'), ('F', 'Y'), ('HH', 'Y'), ('V', 'Y'), ('TH', 'Y'),
      ('M', 'Y'), ('S', 'P', 'Y'), ('S', 'K', 'Y'), ('G', 'Y')])
 
+# Handle exceptional stems that end in "ing" but don't have the suffix -ing
+VALID_ING_STEMS = set(["darling"])
+
 
 def _remove_stress(phoneme):
     """Remove stress from a CMUDict phoneme.
@@ -286,6 +289,7 @@ def analyze(inpath, prondict, stempath):
             # Determine whether this has an -ing suffix and the stem
             # is likely a real word (as opposed to string/bring).
             if (not counted_stem and token.endswith("ing") and
+                    token not in VALID_ING_STEMS and
                     any(vowel in token[:-3] for vowel in "aeiouy")):
                 # Tokens like "running", which would only count as
                 # participants under some analyses, but are otherwise
@@ -361,6 +365,12 @@ def analyze(inpath, prondict, stempath):
     print "Stem exceptions counts (Phase 2, no -ing):"
     for item, count in phase2.exception_counts.most_common():
         print item, count
+    print
+
+    # Print the exceptions under aggressive
+    print "Stem exceptions (aggressive):"
+    for item in phase2.exceptions(COUNT_AGGRESSIVE):
+        print item
 
 
 def main():
