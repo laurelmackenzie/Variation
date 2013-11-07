@@ -49,6 +49,7 @@ hiw.NP$rPBACKWARD = resid(lm(PBACKWARD ~ FREQHOST, hiw.NP))
 hiw.NP.dur <- subset(hiw.NP, !is.na(SUBJ_DUR))
 # Residualize, as the correlation is ~ .8
 hiw.NP.dur$rSUBJ_DUR = resid(lm(SUBJ_DUR ~ NO_WORDS, hiw.NP.dur))
+hiw.NP.dur$rNO_WORDS = resid(lm(NO_WORDS ~ SUBJ_DUR, hiw.NP.dur))
 
 # Pull out PFORWARDs for analysis
 hiw.NP.probs <- subset(hiw.NP, select = c(PREC_WORD, WORD, FOLL_WORD, PFORWARD, PBACKWARD, NO_WORDS, COMPLETE_SUBJ))
